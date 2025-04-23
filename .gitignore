@@ -30,3 +30,23 @@
 *.exe
 *.out
 *.app
+
+#xmake
+build/
+.xmake/
+include/ccmcp/global/config.h
+
+# vscode
+.vscode/
+.vscode-test/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+CMakeLists.txt.user
+CPackConfig.cmake
+CPackSourceConfig.cmake
+install_manifest.txt
