@@ -5,6 +5,7 @@ set_version("0.0.1", {build = "$(buildversion)"})
 set_configvar("LEGAL_COPYRIGHT", "Copyright (C) 2024 Btk-Project")
 set_configvar("PROJECT_NAME", "coro-cpp-mcp")
 set_version("0.2.1", {build = "%Y%m%d%H%M"})
+set_configvar("LATEST_PROTOCOL_VERSION", "2024-11-05")
 
 -- 全局设置
 add_configfiles("include/ccmcp/global/config.h.in")

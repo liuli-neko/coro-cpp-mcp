@@ -6,12 +6,19 @@
 NEKO_USE_NAMESPACE
 CCMCP_USE_NAMESPACE
 
+struct AddFuncParams {
+    int a;
+    int b;
+
+    NEKO_SERIALIZER(a, b)
+};
+
 struct MCPTools {
-    ToolFunction<int(int, int), "add", "a", "b"> add{{"a number", "a number"}};
+    ToolFunction<int(AddFuncParams), "add"> add{"sum of two numbers", {"a number", "a number"}};
 };
 
 int main(int argc, char* argv[]) {
-    
+
     McpServer<MCPTools> server;
 
     // TODO: add server code here

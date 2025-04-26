@@ -6,7 +6,9 @@
 
 #include <nekoproto/jsonrpc/jsonrpc.hpp>
 
+#include "ccmcp/model/base.hpp"
 CCMCP_BN
+
 
 
 CCMCP_EN
