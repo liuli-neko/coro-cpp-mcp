@@ -182,7 +182,9 @@ struct ToolFunction {
     using RequestType  = TypeTraits::RequestType;
     using ResponseType = TypeTraits::ResponseType;
 
-    ToolFunction(std::string description, std::vector<std::string> paramsDescription) {}
+    ToolFunction(std::string description, std::vector<std::string> paramsDescription) {
+        
+    }
 
     std::map<std::string_view, std::string> mParamsDescription;
 };

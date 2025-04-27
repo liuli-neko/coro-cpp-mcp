@@ -33,32 +33,6 @@ struct Annotations {
     NEKO_SERIALIZER(audience, priority)
 };
 
-struct TextContent {
-    std::string type = "text";
-    std::string text;
-    std::optional<Annotations> annotations;
-
-    NEKO_SERIALIZER(type, text, annotations)
-};
-
-struct ImageContent {
-    std::string type = "image";
-    // The base64-encoded image data.
-    std::string data;
-    // The MIME type of the image. Different providers may support different image types.
-    std::string mimeType;
-    std::optional<Annotations> annotations;
-
-    NEKO_SERIALIZER(type, data, mimeType, annotations)
-};
-
-struct SamplingMessage {
-    Role role;
-    std::variant<TextContent, ImageContent> content;
-
-    NEKO_SERIALIZER(role, content)
-};
-
 struct BlobResourceContents {
     std::string blob;
 
@@ -112,5 +86,45 @@ struct TextResourceContents {
     NEKO_SERIALIZER(text)
 };
 
+struct TextContent {
+    std::string type = "text";
+    std::string text;
+    std::optional<Annotations> annotations;
+
+    NEKO_SERIALIZER(type, text, annotations)
+};
+
+struct ImageContent {
+    std::string type = "image";
+    // The base64-encoded image data.
+    std::string data;
+    // The MIME type of the image. Different providers may support different image types.
+    std::string mimeType;
+    std::optional<Annotations> annotations;
+
+    NEKO_SERIALIZER(type, data, mimeType, annotations)
+};
+
+struct SamplingMessage {
+    Role role;
+    std::variant<TextContent, ImageContent> content;
+
+    NEKO_SERIALIZER(role, content)
+};
+
+struct EmbeddedResource {
+    std::string type = "resource";
+    std::variant<TextResourceContents, BlobResourceContents> resource;
+    std::optional<Annotations> annotations;
+
+    NEKO_SERIALIZER(type, resource, annotations)
+};
+
+struct PromptMessage {
+    Role role;
+    std::variant<TextContent, ImageContent, EmbeddedResource> content;
+
+    NEKO_SERIALIZER(role, content)
+};
 
 CCMCP_EN
