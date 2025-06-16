@@ -127,4 +127,52 @@ struct PromptMessage {
     NEKO_SERIALIZER(role, content)
 };
 
+namespace detail {
+template <typename T, class enable = void>
+struct MakeContentHelper {
+    using type = T;
+    static auto make([[maybe_unused]] const T& t) { returnstatic_assert(std::is_class_v<T>, "unsupported type"); }
+};
+
+template <typename T>
+struct MakeContentHelper<T, std::enable_if_t<std::is_same_v<T, TextContent>>> {
+    using type = TextContent;
+    static auto make(const TextContent& t) { return t; }
+};
+
+template <typename T>
+struct MakeContentHelper<T, std::enable_if_t<std::is_same_v<T, ImageContent>>> {
+    using type = ImageContent;
+    static auto make(const ImageContent& t) { return t; }
+};
+
+template <typename T>
+struct MakeContentHelper<T, std::enable_if_t<std::is_same_v<T, EmbeddedResource>>> {
+    using type = EmbeddedResource;
+    static auto make(const EmbeddedResource& t) { return t; }
+};
+template <>
+struct MakeContentHelper<std::string, void> {
+    using type = TextContent;
+    static auto make(const std::string& t) { return TextContent{.text = t}; }
+};
+template <>
+struct MakeContentHelper<std::string_view, void> {
+    using type = TextContent;
+    static auto make(const std::string_view& t) { return TextContent{.text = std::string(t)}; }
+};
+template <typename T>
+    requires requires(T t) {
+        { std::to_string(t) } -> std::convertible_to<std::string>;
+    }
+struct MakeContentHelper<T, void> {
+    using type = TextContent;
+    static auto make(const T& t) { return TextContent{.text = std::to_string(t)}; }
+};
+} // namespace detail
+
+template <typename T>
+static auto make_content(const T& t) {
+    return detail::MakeContentHelper<T>::make(t);
+}
 CCMCP_EN

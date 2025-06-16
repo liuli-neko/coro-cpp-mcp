@@ -197,7 +197,7 @@
     "metadata": {                   // 响应元数据（可选）
       "executionTime": 12.3,        // 执行时间(ms)
       "resourceUsage": {            // 资源使用情况
-        "memory": "256KB"           
+        "memory": "256KB"
       }
     }
   }

@@ -23,9 +23,9 @@ end
 function autofunc.library_autodefine(target)
     local targNameUpper = string.upper(target:name())
     if target:kind() == "shared" then
-        target:add("defines", "MKS_" .. targNameUpper .. "_DLL")
+        target:add("defines", "CCMCP_" .. targNameUpper .. "_DLL")
     end
-    target:add("defines", "MKS_" .. targNameUpper .. "_EXPORTS")
+    target:add("defines", "CCMCP_" .. targNameUpper .. "_EXPORTS")
 end
 
 function main()

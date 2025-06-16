@@ -52,10 +52,10 @@ struct ToolCallRequestParams {
     /// The name of the tool to call
     std::string name;
     /// The parameters to pass to the tool
-    std::map<std::string, JsonValue> parameters;
+    JsonValue arguments;
     std::optional<Meta> _meta;
 
-    NEKO_SERIALIZER(name, parameters, _meta)
+    NEKO_SERIALIZER(name, arguments, _meta)
 };
 
 struct CallToolResult {

@@ -4,9 +4,10 @@
 #include "ccmcp/model/base.hpp"
 
 #include <nekoproto/jsonrpc/jsonrpc.hpp>
+#include <nekoproto/serialization/json/schema.hpp>
 
 CCMCP_BN
-
+using NEKO_NAMESPACE::JsonSchema;
 using JsonValue                = NEKO_NAMESPACE::JsonSerializer::JsonValue;
 using ExperimentalCapabilities = std::map<std::string, JsonValue>;
 
@@ -116,39 +117,13 @@ struct ToolAnnotations {
     NEKO_SERIALIZER(title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
 };
 
-struct InputSchemaPropertie {
-    /// the type of the parameter, e.g., "string", "interger", "boolean", etc.
-    std::string type;
-    /// the format of the parameter, e.g., "int32", "int64", "float", etc.
-    std::optional<std::string> format;
-    /// the description of the parameter
-    std::optional<std::string> description;
-    /// the default value of the parameter
-    std::optional<JsonValue> defaultValue;
-
-    NEKO_SERIALIZER(type, format, description, defaultValue)
-};
-
-using InputSchemaProperties = std::map<std::string, InputSchemaPropertie>;
-
-struct InputSchema {
-    /// the type of the input schema, e.g., "object", "array", etc.
-    std::string type = "object";
-    /// the properties of the input schema, if type is "object"
-    std::optional<InputSchemaProperties> properties;
-    /// the required properties of the input schema, if type is "object"
-    std::optional<std::vector<std::string>> required;
-
-    NEKO_SERIALIZER(type, properties, required)
-};
-
 struct Tool {
     /// The name of the tool
     std::string name;
     /// A description of what the tool does
     std::optional<std::string> description;
     /// A JSON Schema object defining the expected parameters for the tool
-    std::shared_ptr<JsonValue> inputSchema;
+    std::shared_ptr<JsonSchema> inputSchema;
     /// Optional additional tool information.
     std::optional<ToolAnnotations> annotations;
 

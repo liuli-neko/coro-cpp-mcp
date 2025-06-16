@@ -4,7 +4,6 @@ set_version("0.0.1", {build = "$(buildversion)"})
 
 set_configvar("LEGAL_COPYRIGHT", "Copyright (C) 2024 Btk-Project")
 set_configvar("PROJECT_NAME", "coro-cpp-mcp")
-set_version("0.2.1", {build = "%Y%m%d%H%M"})
 set_configvar("LATEST_PROTOCOL_VERSION", "2024-11-05")
 
 -- 全局设置
@@ -20,6 +19,9 @@ add_rules("mode.release", "mode.debug", "mode.releasedbg", "mode.minsizerel")
 add_rules("plugin.compile_commands.autoupdate", {lsp = "clangd", outputdir = ".vscode"})
 set_policy("package.cmake_generator.ninja", true)
 
+if is_plat("windows") then
+    add_cxxflags("/bigobj")
+end
 if is_plat("linux") then
     add_cxxflags("-fcoroutines")
     add_links("rt")
@@ -40,19 +42,19 @@ add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 
 -- headonly
 add_requires("ilias")
-add_requires("fmt", {version = "11.0.x", configs = {shared = is_config("3rd_kind", "shared"), header_only = false}})
+add_requires("fmt", {version = "11.0.x", configs = {shared = is_config("3rd_kind", "shared"), header_only = true}})
 -- normal libraries
 add_requires("neko-proto-tools", {version = "dev", configs = {shared = is_config("3rd_kind", "shared"), enable_rapidxml = false, enable_simdjson = false, enable_protocol = false, enable_rapidjson = true, enable_fmt = true, enable_communication = false}})
 
 
 -- normal libraries' dependencies configurations
-add_requireconfs("**.fmt", {override = true, version = "11.0.x", configs = {shared = is_config("3rd_kind", "shared"), header_only = false}})
+add_requireconfs("**.fmt", {override = true, version = "11.0.x", configs = {shared = is_config("3rd_kind", "shared"), header_only = true}})
 add_requireconfs("**.neko-proto-tools", {override = true, version = "dev", configs = {shared = is_config("3rd_kind", "shared"), enable_rapidxml = false, enable_simdjson = false, enable_protocol = false, enable_rapidjson = true, enable_fmt = true, enable_communication = false}})
 add_requireconfs("**.ilias", {override = true})
 add_requireconfs("**.rapidjson", {override = true, configs = {header_only = true}})
 
 if is_mode("debug") then
-    add_defines("ILIAS_ENABLE_LOG", "ILIAS_USE_FMT", "ILIAS_TASK_TRACE")
+    add_defines("ILIAS_ENABLE_LOG", "ILIAS_USE_FMT", "ILIAS_TASK_TRACE", "NEKO_PROTO_LOG")
 end
 
 option("custom_namespace")
