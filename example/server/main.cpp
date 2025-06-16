@@ -33,6 +33,14 @@ int main(int argc, char* argv[]) {
     ::SetConsoleCP(65001);
     ::SetConsoleOutputCP(65001);
     std::setlocale(LC_ALL, ".utf-8");
+
+#if 0
+    // For debugging...
+    while (!::IsDebuggerPresent()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+#endif
+
 #endif
 
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);

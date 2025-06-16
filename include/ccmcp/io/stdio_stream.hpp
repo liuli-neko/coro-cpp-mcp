@@ -44,12 +44,16 @@ public:
         if (mIsCancel) {
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
         }
-        auto ret = co_await (out.writeAll(data) | ILIAS_NAMESPACE::ignoreCancellation);
-        if (!ret) {
-            co_return ILIAS_NAMESPACE::Unexpected<ILIAS_NAMESPACE::Error>(ret.error());
-        }
-        co_await (out.write(ILIAS_NAMESPACE::makeBuffer("\n")) | ILIAS_NAMESPACE::ignoreCancellation);
-        NEKO_LOG_INFO("ccmcp", "Sent {}", std::string_view{reinterpret_cast<const char*>(data.data()), data.size()});
+        // TODO: USE BETTER WAY
+        std::string json{reinterpret_cast<const char*>(data.data()), data.size()};
+        json.push_back('\n');
+        ::fputs(json.c_str(), stdout);
+        ::fflush(stdout);
+        // auto ret = co_await (out.writeAll(ILIAS_NAMESPACE::makeBuffer(json)) | ILIAS_NAMESPACE::ignoreCancellation);
+        // if (!ret) {
+            // co_return ILIAS_NAMESPACE::Unexpected<ILIAS_NAMESPACE::Error>(ret.error());
+        // }
+        // NEKO_LOG_INFO("ccmcp", "Sent {}", std::string_view{reinterpret_cast<const char*>(data.data()), data.size()});
         co_return {};
     }
 

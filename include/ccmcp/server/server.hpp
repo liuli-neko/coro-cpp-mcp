@@ -61,6 +61,14 @@ void McpServer<ToolFunctions>::_register_rpc_methods() {
         std::bind(&McpServer::_initialized, this, std::placeholders::_1));
     mServer->toolsList = std::bind(&McpServer::_tools_list, this, std::placeholders::_1);
     mServer->toolsCall = std::bind(&McpServer::_tools_call, this, std::placeholders::_1);
+    mServer->resourcesList = [](auto) -> detail::ListResourcesResult {
+        // TODO: MUST IMPL
+        return {};
+    };
+    mServer->resourcesTemplatesList = [](auto) -> detail::ListResourceTemplatesResult {
+        // TODO: MUST IMPL
+        return {};
+    };
 }
 
 template <typename ToolFunctions>
