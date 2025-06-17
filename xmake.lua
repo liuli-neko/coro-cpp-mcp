@@ -2,7 +2,7 @@
 set_project("coro-cpp-mcp")
 set_version("0.0.1", {build = "$(buildversion)"})
 
-set_configvar("LEGAL_COPYRIGHT", "Copyright (C) 2024 Btk-Project")
+set_configvar("LEGAL_COPYRIGHT", "Copyright (C) 2024 liuli-neko(https://github.com/liuli-neko)")
 set_configvar("PROJECT_NAME", "coro-cpp-mcp")
 set_configvar("LATEST_PROTOCOL_VERSION", "2024-11-05")
 

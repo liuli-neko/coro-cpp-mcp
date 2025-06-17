@@ -161,6 +161,16 @@ struct MakeContentHelper<std::string_view, void> {
     using type = TextContent;
     static auto make(const std::string_view& t) { return TextContent{.text = std::string(t)}; }
 };
+template <>
+struct MakeContentHelper<const char*, void> {
+    using type = TextContent;
+    static auto make(const char* t) { return TextContent{.text = std::string(t)}; }
+};
+template <>
+struct MakeContentHelper<std::u8string, void> {
+    using type = TextContent;
+    static auto make(const std::u8string& t) { return TextContent{.text = std::string(t.begin(), t.end())}; }
+};
 template <typename T>
     requires requires(T t) {
         { std::to_string(t) } -> std::convertible_to<std::string>;

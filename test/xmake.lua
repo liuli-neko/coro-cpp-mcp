@@ -28,7 +28,7 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
         -- set test in different cpp versions
         local cpp_versions = {"c++20"}
         for i = 1, #cpp_versions do
-            add_tests(string.gsub(cpp_versions[i], '+', 'p', 2), {group = "proto", kind = "binary", files = {"../src/proto_base.cpp", file}, languages = cpp_versions[i], run_timeout = 30000})
+            add_tests(string.gsub(cpp_versions[i], '+', 'p', 2), {group = "proto", kind = "binary", files = {file}, languages = cpp_versions[i], run_timeout = 30000})
         end
         if has_config("memcheck") then
             on_run(function (target)

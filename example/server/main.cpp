@@ -14,6 +14,14 @@ struct TowParams {
     double a;
     double b;
 };
+struct EchoParams {
+    std::string message;
+};
+
+struct HelloParams {
+    std::string name;
+    std::string greeting;
+};
 // {"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"Cline","version":"3.13.1"}},"jsonrpc":"2.0","id":0}
 // {"method":"notifications/initialized","jsonrpc":"2.0"}
 // {"method": "tools/list", "jsonrpc": "2.0", "id": 1}
@@ -26,9 +34,15 @@ struct MCPTools {
     ToolFunction<double(TowParams), "mult"> mult{"product of two numbers"};
     ToolFunction<double(TowParams), "div"> div{"quotient of two numbers"};
     ToolFunction<double(TowParams), "sub"> sub{"difference of two numbers"};
+    ToolFunction<std::string(EchoParams), "echo"> echo{"echo string"};
+    ToolFunction<std::string(HelloParams), "hello_unicode"> hello_unicode{
+        "🌟 A tool that uses various Unicode characters in its description: "
+        "á é í ó ú ñ 漢字 🎉"};
+    ToolFunction<std::vector<std::string>(), "list_emoji_categories"> list_emoji_categories{
+        "🎨 Tool that returns a list of emoji categories"};
 };
 
-int main(int argc, char* argv[]) {
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 #if defined(_WIN32)
     ::SetConsoleCP(65001);
     ::SetConsoleOutputCP(65001);
@@ -49,16 +63,21 @@ int main(int argc, char* argv[]) {
     McpServer<MCPTools> server(platform);
     server.set_instructions("This is a test server");
     server->add.paramsDescription = {{"a", "first number"}, {"b", "second number"}};
-    server->add.description       = "returns sum of two numbers";
     server->add                   = [](TowParams params) { return params.a + params.b; };
     server->mult                  = [](TowParams params) { return params.a * params.b; };
     server->div                   = [](TowParams params) { return params.a / params.b; };
     server->sub                   = [](TowParams params) { return params.a - params.b; };
-
-    auto tools = server.tools_list({});
+    server->echo                  = [](EchoParams params) { return params.message; };
+    server->hello_unicode         = [](HelloParams params) { return params.greeting + " " + params.name; };
+    server->list_emoji_categories = []() {
+        std::vector<std::string> categories = {"😀 Smileys & Emotion", "👋 People & Body", "🐶 Animals & Nature",
+                                               "🍎 Food & Drink",      "⚽ Activities",    "🌍 Travel & Places",
+                                               "💡 Objects",           "❤️ Symbols",        "🚩 Flags"};
+        return categories;
+    };
 
     // TODO: add server code here
-    ilias_wait server.start<ILIAS_NAMESPACE::Console>("stdio://stdout-stdin");
+    ilias_wait server.start<Stdio>("stdio://stdout-stdin");
     ilias_wait server.wait();
 
     return 0;

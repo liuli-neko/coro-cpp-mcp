@@ -7,10 +7,6 @@
 #include "ccmcp/model/capabilities.hpp"
 
 CCMCP_BN
-
-namespace detail {
-NEKO_USE_NAMESPACE
-
 struct EmptyRequestParams {
     std::optional<Meta> _meta;
 
@@ -299,6 +295,8 @@ struct CancelledNotificationParams {
 
     NEKO_SERIALIZER(requestId, reason, _meta)
 };
+namespace detail {
+NEKO_USE_NAMESPACE
 
 struct McpJsonRpcMethods {
     RpcMethod<InitializeResult(InitializeRequestParams), "initialize"> initialize;
@@ -321,8 +319,8 @@ struct McpJsonRpcMethods {
     RpcMethod<void(LoggingMessageNotificationParams), "notifications/message"> loggingMessage;
     RpcMethod<void(CreateMessageRequestParams), "sampling/createMessage"> createMessage;
     RpcMethod<CompleteResult(CompleteRequestParams), "completion/complete"> completionComplete;
-    RpcMethod<void(EmptyRequestParams), "roots/list"> rootsList;
-    RpcMethod<ListRootsResult(), "notifications/roots/list_changed"> rootsListChanged;
+    RpcMethod<ListRootsResult(EmptyRequestParams), "roots/list"> rootsList;
+    RpcMethod<void(EmptyRequestParams), "notifications/roots/list_changed"> rootsListChanged;
     RpcMethod<void(CancelledNotificationParams), "notifications/cancelled"> cancelled;
 };
 } // namespace detail
