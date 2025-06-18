@@ -24,8 +24,9 @@ class McpServer {
     template <typename T>
     using JsonRpcServer = NEKO_NAMESPACE::JsonRpcServer<T>;
     template <typename T>
-    using Reflect        = NEKO_NAMESPACE::Reflect<T>;
-    using JsonSerializer = NEKO_NAMESPACE::JsonSerializer;
+    using Reflect            = NEKO_NAMESPACE::Reflect<T>;
+    using JsonSerializer     = NEKO_NAMESPACE::JsonSerializer;
+    using ScopedCancelHandle = ILIAS_NAMESPACE::ScopedCancelHandle;
 
     void _register_tool_functions();
     void _register_rpc_methods();
@@ -198,7 +199,14 @@ auto McpServer<ToolFunctions>::_cancelled(CancelledNotificationParams params) ->
                   params.requestId.index() == 0 ? std::to_string(std::get<0>(params.requestId))
                                                 : std::get<1>(params.requestId),
                   params.reason.has_value() ? *params.reason : "unknown reason");
-    mScope.cancel();
+    switch (params.requestId.index()) {
+    case 0:
+        mServer.cancel(std::get<0>(params.requestId));
+        break;
+    case 1:
+        mServer.cancel(std::get<1>(params.requestId));
+        break;
+    }
     co_return {};
 }
 
