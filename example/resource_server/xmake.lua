@@ -1,4 +1,4 @@
-target("server-example")
+target("resource-server-example")
     set_kind("binary")
     set_targetdir("$(builddir)/bin")
     add_deps("coro-cpp-mcp")

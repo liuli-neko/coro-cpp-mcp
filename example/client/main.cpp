@@ -1,9 +1,11 @@
+#include <iostream>
+
 #include <ilias/platform.hpp>
 #include <nekoproto/serialization/to_string.hpp>
 
+#include "ccmcp/client/client.hpp"
 #include "ccmcp/io/stdio_stream.hpp"
 #include "ccmcp/model/model.hpp"
-#include "ccmcp/server/server.hpp"
 
 NEKO_USE_NAMESPACE
 CCMCP_USE_NAMESPACE
@@ -57,27 +59,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     ILIAS_NAMESPACE::PlatformContext platform;
-    McpServer<MCPTools> server(platform);
-    server.set_instructions("This is a test server");
-    server->add.paramsDescription = {{"a", "first number"}, {"b", "second number"}};
-    server->add                   = [](TowParams params) { return params.a + params.b; };
-    server->mult                  = [](TowParams params) { return params.a * params.b; };
-    server->div                   = [](TowParams params) { return params.a / params.b; };
-    server->sub                   = [](TowParams params) { return params.a - params.b; };
-    server->echo                  = [](EchoParams params) { return params.message; };
-    server->hello_unicode         = [](HelloParams params) { return params.greeting + " " + params.name; };
-    server.register_tool_function("list_emoji_categories", std::function([]() {
-                                      std::vector<std::string> categories = {
-                                          "😀 Smileys & Emotion", "👋 People & Body", "🐶 Animals & Nature",
-                                          "🍎 Food & Drink",      "⚽ Activities",    "🌍 Travel & Places",
-                                          "💡 Objects",           "❤️ Symbols",        "🚩 Flags"};
-                                      return categories;
-                                  }),
-                                  "🎨 Tool that returns a list of emoji categories");
+    McpClient<MCPTools> client(platform);
 
     // TODO: add server code here
-    ilias_wait server.start<Stdio>("stdio://stdout-stdin");
-    ilias_wait server.wait();
+    ilias_wait client.connect<Stdio>("stdio://stdout-stdin");
+    auto ret = ilias_wait client->add({.a = 5, .b = 2});
+    std::cout << "add: " << ret.value_or(-1) << std::endl;
 
     return 0;
 }

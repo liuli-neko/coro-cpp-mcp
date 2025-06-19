@@ -1,6 +1,8 @@
 #pragma once
 
 #include <iostream>
+#include <nekoproto/serialization/serializer_base.hpp>
+#include <optional>
 
 #if defined(_WIN32)
 // clang-format off
@@ -63,6 +65,9 @@ struct ResourceUsage {
     std::string memory;
 };
 struct ToolCallInfo {
+    std::optional<std::string> error;
     uint64_t executionTime;
     ResourceUsage resourceUsage;
+
+    NEKO_SERIALIZER(error, executionTime, resourceUsage);
 };
