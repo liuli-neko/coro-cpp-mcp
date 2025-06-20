@@ -15,6 +15,18 @@ CCMCP_BN
 template <typename ToolFunctions>
 class McpServer;
 
+namespace detail {
+struct RpcMethodWrapper {
+    template <typename U>
+    using IoTask = ILIAS_NAMESPACE::IoTask<U>;
+
+    virtual ~RpcMethodWrapper() = default;
+
+    virtual auto call(JsonSerializer::InputSerializer& in) -> IoTask<CallToolResult> = 0;
+    auto operator()(JsonSerializer::InputSerializer& in) -> IoTask<CallToolResult> { return call(in); }
+};
+} // namespace detail
+
 template <>
 class McpServer<void> {
 protected:
@@ -71,13 +83,13 @@ protected:
     JsonRpcServer<detail::McpJsonRpcMethods> mServer;
     std::string mInstructions;
     TaskScope mScope; // 针对tools_call的任务的管理
-    std::map<std::string_view, std::function<IoTask<CallToolResult>(JsonSerializer::InputSerializer& in)>> mHandlers;
+    std::map<std::string_view, std::unique_ptr<detail::RpcMethodWrapper>> mHandlers;
 
     // for tools
     std::vector<std::function<Tool()>> mTools;
 
     // for resources
-    std::map<std::string_view, std::function<ResourceContentsT(std::optional<Meta> meta)>> mResources;
+    std::map<std::string, std::function<ResourceContentsT(std::optional<Meta> meta)>> mResources;
     std::vector<Resource> mResourceList;
 };
 
@@ -107,32 +119,35 @@ inline void McpServer<void>::_register_rpc_methods() {
         std::bind(&McpServer::_initialized, this, std::placeholders::_1));
     mServer->toolsList     = std::bind(&McpServer::_tools_list, this, std::placeholders::_1);
     mServer->toolsCall     = std::bind(&McpServer::_tools_call, this, std::placeholders::_1);
-    mServer->resourcesList = [this](auto) -> ListResourcesResult {
+    mServer->resourcesList = [this](EmptyRequestParams) -> ListResourcesResult {
         return ListResourcesResult{.resources = mResourceList, .nextCursor = std::nullopt};
     }; // TODO: MUST IMPL 默认没有任何资源模板
-    mServer->resourcesTemplatesList = [](auto) -> ListResourceTemplatesResult { return {}; }; // TODO: MUST IMPL
-    mServer->resourcesRead          = [this](ReadResourceRequestParams request) -> ReadResourceResult {
+    mServer->resourcesTemplatesList = [](EmptyRequestParams) -> ListResourceTemplatesResult {
+        return {};
+    }; // TODO: MUST IMPL
+    mServer->resourcesRead = [this](ReadResourceRequestParams request) -> ReadResourceResult {
         ReadResourceResult result;
+        NEKO_LOG_INFO("mcp server", "read resource {}", request.uri);
         if (auto it = mResources.find(request.uri); it != mResources.end()) {
             result.contents.push_back(it->second(request._meta));
         }
         return result;
     };
-    mServer->progress             = [](auto) -> void {};
-    mServer->resourcesListChanged = [](auto) -> void {};
-    mServer->resourcesSubscribe   = [](auto) -> void {};
-    mServer->resourcesUnsubscribe = [](auto) -> void {};
-    mServer->resourcesUpdated     = [](auto) -> void {};
-    mServer->promptsList          = [](auto) -> void {};
-    mServer->promptsGet           = [](auto) -> GetPromptResult { return {}; };
-    mServer->promptsListChanged   = [](auto) -> void {};
-    mServer->toolsListChanged     = [](auto) -> void {};
-    mServer->loggingSetLevel      = [](auto) -> void {};
-    mServer->loggingMessage       = [](auto) -> void {};
-    mServer->createMessage        = [](auto) -> void {};
-    mServer->completionComplete   = [](auto) -> CompleteResult { return {}; };
-    mServer->rootsList            = [](auto) -> ListRootsResult { return {}; };
-    mServer->rootsListChanged     = [](auto) -> void {};
+    mServer->progress             = [](ProgressNotificationParams) -> void {};
+    mServer->resourcesListChanged = [](EmptyRequestParams) -> void {};
+    mServer->resourcesSubscribe   = [](SubscribeRequestParams) -> void {};
+    mServer->resourcesUnsubscribe = [](UnsubscribeRequestParams) -> void {};
+    mServer->resourcesUpdated     = [](ResourceUpdatedNotificationParams) -> void {};
+    mServer->promptsList          = [](EmptyRequestParams) -> void {};
+    mServer->promptsGet           = [](GetPromptRequestParams) -> GetPromptResult { return {}; };
+    mServer->promptsListChanged   = [](EmptyRequestParams) -> void {};
+    mServer->toolsListChanged     = [](EmptyRequestParams) -> void {};
+    mServer->loggingSetLevel      = [](SetLevelRequestParams) -> void {};
+    mServer->loggingMessage       = [](LoggingMessageNotificationParams) -> void {};
+    mServer->createMessage        = [](CreateMessageRequestParams) -> void {};
+    mServer->completionComplete   = [](CompleteRequestParams) -> CompleteResult { return {}; };
+    mServer->rootsList            = [](EmptyRequestParams) -> ListRootsResult { return {}; };
+    mServer->rootsListChanged     = [](EmptyRequestParams) -> void {};
     mServer->cancelled            = std::function<IoTask<void>(CancelledNotificationParams)>(
         std::bind(&McpServer::_cancelled, this, std::placeholders::_1));
 }
@@ -147,6 +162,10 @@ template <typename T>
 struct RpcMethodType<std::shared_ptr<T>> {
     using MethodT = T;
 };
+template <typename T>
+struct RpcMethodType<std::unique_ptr<T>> {
+    using MethodT = T;
+};
 
 template <typename T>
 struct RpcMethodType<T*> {
@@ -154,16 +173,17 @@ struct RpcMethodType<T*> {
 };
 
 template <typename T, typename ToolFunctions>
-struct RpcMethodWrapper {
+struct RpcMethodWrapperImpl : public RpcMethodWrapper {
     template <typename U>
     using IoTask = ILIAS_NAMESPACE::IoTask<U>;
     template <typename U>
     using Result  = ILIAS_NAMESPACE::Result<U>;
     using MethodT = std::decay_t<typename RpcMethodType<T>::MethodT>;
+    RpcMethodWrapperImpl(T method, McpServer<ToolFunctions>* self) : method(std::move(method)), self(self) {}
 
     T method;
     McpServer<ToolFunctions>* self;
-    auto operator()(JsonSerializer::InputSerializer& in) const -> IoTask<CallToolResult> {
+    auto call(JsonSerializer::InputSerializer& in) -> IoTask<CallToolResult> override {
         if (!(*method)) {
             co_return CallToolResult{.content = {}, .isError = true, .metadata = {}};
         }
@@ -206,7 +226,7 @@ void McpServer<ToolFunctions>::_register_tool_functions() {
         Reflect<ToolFunctions>::forEachWithoutName(mToolFunctions, [this](auto& rpcMethodMetadata) {
             using MethodT = std::decay_t<decltype(rpcMethodMetadata)>;
             mHandlers[rpcMethodMetadata.name] =
-                detail::RpcMethodWrapper<MethodT*, ToolFunctions>(&rpcMethodMetadata, this);
+                std::make_unique<detail::RpcMethodWrapperImpl<MethodT*, ToolFunctions>>(&rpcMethodMetadata, this);
         });
     }
 }
@@ -280,7 +300,7 @@ inline auto McpServer<void>::_tools_call(ToolCallRequestParams params) -> IoTask
     ToolCallInfo info;
     if (auto item = mHandlers.find(params.name); item != mHandlers.end()) {
         JsonSerializer::InputSerializer in(params.arguments);
-        if (auto ret = co_await mScope.spawn(item->second(in)); ret) {
+        if (auto ret = co_await mScope.spawn((*item->second)(in)); ret) {
             result = ret.value();
         } else {
             result.isError = true;
@@ -307,10 +327,14 @@ inline auto McpServer<void>::register_local_file_resource(std::string_view name,
         resource.description = std::string(description);
     }
     resource.metadata = ResourceMetadata{.type = "file", .size = std::filesystem::file_size(path)};
-    register_resource(resource, [path = path](std::optional<Meta>) -> ResourceContentsT {
+    register_resource(resource, [path = path, uri = resource.uri](std::optional<Meta>) -> ResourceContentsT {
         auto file = std::ifstream(path, std::ios::binary);
-        TextResourceContents contents;
-        contents.text = std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        BlobResourceContents contents;
+        contents.uri = uri;
+        if (file.is_open()) {
+            auto data = Base64Covert::Encode({std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()});
+            contents.blob = std::string(data.begin(), data.end());
+        }
         return contents;
     });
     return true;
@@ -336,9 +360,9 @@ auto McpServer<void>::register_tool_function(std::string_view name, std::functio
     using MethodT = DynamicToolFunction<std::function<Ret(Args...)>>;
     MethodT rpcMethodMetadata(name, description);
     rpcMethodMetadata = func;
-    auto wrapper      = detail::RpcMethodWrapper<std::shared_ptr<MethodT>, void>(
-        std::make_shared<MethodT>(std::move(rpcMethodMetadata)), this);
-    mTools.push_back(std::function([method = wrapper.method.get()]() { return method->tool(); }));
+    auto wrapper      = std::make_unique<detail::RpcMethodWrapperImpl<std::unique_ptr<MethodT>, void>>(
+        std::make_unique<MethodT>(std::move(rpcMethodMetadata)), this);
+    mTools.push_back(std::function([method = wrapper->method.get()]() { return method->tool(); }));
     mHandlers[name] = std::move(wrapper);
     return true;
 }
@@ -352,9 +376,9 @@ auto McpServer<void>::register_tool_function(std::string_view name, std::functio
     using MethodT = DynamicToolFunction<std::function<Ret(Args...)>>;
     MethodT rpcMethodMetadata(name, description);
     rpcMethodMetadata = func;
-    auto wrapper      = detail::RpcMethodWrapper<std::shared_ptr<MethodT>, void>(
-        std::make_shared<MethodT>(std::move(rpcMethodMetadata)), this);
-    mTools.push_back(std::function([method = &wrapper.method.get()]() { return method->tool(); }));
+    auto wrapper      = std::make_unique<detail::RpcMethodWrapperImpl<std::unique_ptr<MethodT>, void>>(
+        std::make_unique<MethodT>(std::move(rpcMethodMetadata)), this);
+    mTools.push_back(std::function([method = &wrapper->method.get()]() { return method->tool(); }));
     mHandlers[name] = std::move(wrapper);
     return true;
 }

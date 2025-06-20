@@ -29,7 +29,6 @@ struct HelloParams {
 // {"method": "tools/call", "params": {"name": "mult", "arguments": {"a": 15, "b": 42}}, "jsonrpc": "2.0", "id": 3}
 // {"method": "tools/call", "params": {"name": "div", "arguments": {"a": 16, "b": 22}}, "jsonrpc": "2.0", "id": 4}
 // {"method": "tools/call", "params": {"name": "div", "arguments": {"a": 1, "b": 0}}, "jsonrpc": "2.0", "id": 5}
-// {"method": "tools/call", "params": {"name": "list_emoji_categories", "arguments": {}}, "jsonrpc": "2.0", "id": 5}
 struct MCPTools {
     ToolFunction<double(TowParams), "add"> add{"sum of two numbers"};
     ToolFunction<double(TowParams), "mult"> mult{"product of two numbers"};

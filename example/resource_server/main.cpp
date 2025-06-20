@@ -38,16 +38,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
                               .description = "my github name",
                               .metadata    = std::nullopt,
                               .annotations = std::nullopt},
-                             TextResourceContents{.text = "liuli-neko"});
+                             TextResourceContents{.uri = "my_uri", .text = "liuli-neko"});
     // add a custom dynamic resource
     server.register_resource({.uri         = "my_uri2",
                               .name        = "my_name2",
                               .description = "my github name2",
                               .metadata    = std::nullopt,
                               .annotations = std::nullopt},
-                             [](std::optional<ccmcp::Meta> meta) -> TextResourceContents {
+                             [](std::optional<ccmcp::Meta> meta) {
                                  // you can use the meta to determine what to return
-                                 return TextResourceContents{.text = "https://github.com/liuli-neko"};
+                                 return TextResourceContents{.uri = "my_uri2", .text = "https://github.com/liuli-neko"};
                              });
 
     // TODO: add server code here

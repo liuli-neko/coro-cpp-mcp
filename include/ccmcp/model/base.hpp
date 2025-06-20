@@ -35,9 +35,10 @@ struct Annotations {
 };
 
 struct BlobResourceContents {
+    std::optional<std::string> uri;
     std::string blob;
 
-    NEKO_SERIALIZER(blob)
+    NEKO_SERIALIZER(uri, blob)
 };
 
 struct ResourceMetadata {
@@ -82,9 +83,10 @@ struct ResourceContents {
 };
 
 struct TextResourceContents {
+    std::optional<std::string> uri;
     std::string text;
 
-    NEKO_SERIALIZER(text)
+    NEKO_SERIALIZER(uri, text)
 };
 
 struct TextContent {
