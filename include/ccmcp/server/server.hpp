@@ -2,11 +2,6 @@
 
 #include "ccmcp/global/global.hpp"
 
-#include <filesystem>
-#include <fstream>
-#include <ilias/sync/scope.hpp>
-#include <nekoproto/jsonrpc/jsonrpc.hpp>
-
 #include "ccmcp/model/jsonrpc_protocol.hpp"
 #include "ccmcp/model/model.hpp"
 #include "ccmcp/server/system_info.hpp"
@@ -47,37 +42,42 @@ protected:
     using ScopedCancelHandle = ILIAS_NAMESPACE::ScopedCancelHandle;
 
     void _register_rpc_methods();
-    auto _initialize(InitializeRequestParams) -> IoTask<InitializeResult>;
-    auto _initialized(EmptyRequestParams) -> IoTask<void>;
-    auto _tools_call(ToolCallRequestParams) -> IoTask<CallToolResult>;
-    auto _tools_list(PaginatedRequest) -> IoTask<ToolsListResult>;
-    auto _cancelled(CancelledNotificationParams) -> IoTask<void>;
+    auto _initialize(InitializeRequestParams) noexcept -> IoTask<InitializeResult>;
+    auto _initialized(EmptyRequestParams) noexcept -> IoTask<void>;
+    auto _tools_call(ToolCallRequestParams) noexcept -> IoTask<CallToolResult>;
+    auto _tools_list(PaginatedRequest) noexcept -> IoTask<ToolsListResult>;
+    auto _cancelled(CancelledNotificationParams) noexcept -> IoTask<void>;
 
 public:
     using ResourceContentsT = std::variant<TextResourceContents, BlobResourceContents>;
 
 public:
     McpServer(IoContext& ctx);
-
-    void set_instructions(std::string_view instructions);
-    virtual auto tools_list(const PaginatedRequest&) -> ToolsListResult;
+    auto setCapabilities(const ExperimentalCapabilities& capabilities) noexcept -> void;
+    auto setCapabilities(const LoggingCapability& capabilities) noexcept -> void;
+    auto setCapabilities(const CompletionsCapability& capabilities) noexcept -> void;
+    auto setCapabilities(const PromptsCapability& capabilities) noexcept -> void;
+    auto setCapabilities(const ResourcesCapability& capabilities) noexcept -> void;
+    auto setCapabilities(const ToolsCapability& capabilities) noexcept -> void;
+    void setInstructions(std::string_view instructions) noexcept;
+    virtual auto toolsList(const PaginatedRequest&) -> ToolsListResult;
     auto start(std::string_view url) -> Task<bool>;
     template <typename StreamType>
     auto start(std::string_view url) -> IoTask<IliasError>;
     auto close() -> void;
-    auto is_running() -> bool { return mServer.isListening(); }
+    auto isRunning() -> bool { return mServer.isListening(); }
     auto wait() -> Task<void> { co_await mServer.wait(); }
     template <typename Ret, typename... Args>
-    auto register_tool_function(std::string_view name, std::function<Ret(Args...)> func,
-                                std::string_view description = "") -> bool;
+    auto registerToolFunction(std::string_view name, std::function<Ret(Args...)> func,
+                              std::string_view description = "") -> bool;
     template <typename Ret, typename... Args>
-    auto register_tool_function(std::string_view name, std::function<IoTask<Ret>(Args...)> func,
-                                std::string_view description = "") -> bool;
-    auto json_rpc_server() -> JsonRpcServer<detail::McpJsonRpcMethods>& { return mServer; };
-    auto register_local_file_resource(std::string_view name, std::filesystem::path path, std::string_view uri = "",
-                                      std::string_view description = "") -> bool;
-    auto register_resource(Resource resource, ResourceContentsT) -> void;
-    auto register_resource(Resource resource, std::function<ResourceContentsT(std::optional<Meta> meta)>) -> void;
+    auto registerToolFunction(std::string_view name, std::function<IoTask<Ret>(Args...)> func,
+                              std::string_view description = "") -> bool;
+    auto jsonRpcServer() -> JsonRpcServer<detail::McpJsonRpcMethods>& { return mServer; };
+    auto registerLocalFileResource(std::string_view name, std::filesystem::path path, std::string_view uri = "",
+                                   std::string_view description = "") -> bool;
+    auto registerResource(Resource resource, ResourceContentsT) -> void;
+    auto registerResource(Resource resource, std::function<ResourceContentsT(std::optional<Meta> meta)>) -> void;
 
 protected:
     JsonRpcServer<detail::McpJsonRpcMethods> mServer;
@@ -91,6 +91,7 @@ protected:
     // for resources
     std::map<std::string, std::function<ResourceContentsT(std::optional<Meta> meta)>> mResources;
     std::vector<Resource> mResourceList;
+    ServerCapabilities mCapabilities;
 };
 
 template <typename ToolFunctions>
@@ -100,7 +101,7 @@ public:
 
     auto* operator->() { return &mToolFunctions; }
     const auto* operator->() const { return &mToolFunctions; }
-    ToolsListResult tools_list(const PaginatedRequest&);
+    auto toolsList(const PaginatedRequest&) -> ToolsListResult override;
 
 private:
     void _register_tool_functions();
@@ -111,7 +112,26 @@ private:
 
 inline McpServer<void>::McpServer(IoContext& ctx) : mServer(ctx) { _register_rpc_methods(); }
 
-inline void McpServer<void>::set_instructions(std::string_view instructions) { mInstructions = instructions; }
+inline auto McpServer<void>::setCapabilities(const ExperimentalCapabilities& capabilities) noexcept -> void {
+    mCapabilities.experimental = capabilities;
+}
+inline auto McpServer<void>::setCapabilities(const LoggingCapability& capabilities) noexcept -> void {
+    mCapabilities.logging = capabilities;
+}
+inline auto McpServer<void>::setCapabilities(const CompletionsCapability& capabilities) noexcept -> void {
+    mCapabilities.completions = capabilities;
+}
+inline auto McpServer<void>::setCapabilities(const PromptsCapability& capabilities) noexcept -> void {
+    mCapabilities.prompts = capabilities;
+}
+inline auto McpServer<void>::setCapabilities(const ResourcesCapability& capabilities) noexcept -> void {
+    mCapabilities.resources = capabilities;
+}
+inline auto McpServer<void>::setCapabilities(const ToolsCapability& capabilities) noexcept -> void {
+    mCapabilities.tools = capabilities;
+}
+
+inline void McpServer<void>::setInstructions(std::string_view instructions) noexcept { mInstructions = instructions; }
 
 inline void McpServer<void>::_register_rpc_methods() {
     mServer->initialize  = std::bind(&McpServer::_initialize, this, std::placeholders::_1);
@@ -133,6 +153,7 @@ inline void McpServer<void>::_register_rpc_methods() {
         }
         return result;
     };
+    mServer->ping                 = [](EmptyRequestParams) -> EmptyResult { return {}; };
     mServer->progress             = [](ProgressNotificationParams) -> void {};
     mServer->resourcesListChanged = [](EmptyRequestParams) -> void {};
     mServer->resourcesSubscribe   = [](SubscribeRequestParams) -> void {};
@@ -231,16 +252,16 @@ void McpServer<ToolFunctions>::_register_tool_functions() {
     }
 }
 
-inline auto McpServer<void>::_initialize(InitializeRequestParams params) -> IoTask<InitializeResult> {
+inline auto McpServer<void>::_initialize(InitializeRequestParams params) noexcept -> IoTask<InitializeResult> {
     NEKO_LOG_INFO("mcp server", "initialize protocol version: {}", params.protocolVersion);
     co_return InitializeResult{.protocolVersion = LATEST_PROTOCOL_VERSION,
-                               .capabilities    = ServerCapabilities{},
+                               .capabilities    = mCapabilities,
                                .serverInfo =
                                    Implementation{.name = CCMCP_PROJECT_NAME, .version = CCMCP_VERSION_STRING},
                                .instructions = mInstructions};
 }
 
-inline auto McpServer<void>::_initialized(EmptyRequestParams) -> IoTask<void> {
+inline auto McpServer<void>::_initialized(EmptyRequestParams) noexcept -> IoTask<void> {
     NEKO_LOG_INFO("mcp server", "initialized");
     co_return {};
 }
@@ -254,7 +275,7 @@ auto McpServer<void>::start(std::string_view url) -> IoTask<IliasError> {
 
 inline auto McpServer<void>::close() -> void { mServer.close(); }
 
-inline ToolsListResult McpServer<void>::tools_list([[maybe_unused]] const PaginatedRequest& params) {
+inline ToolsListResult McpServer<void>::toolsList([[maybe_unused]] const PaginatedRequest& params) {
     ToolsListResult result;
     for (const auto& tool : mTools) {
         result.tools.push_back(tool());
@@ -263,8 +284,8 @@ inline ToolsListResult McpServer<void>::tools_list([[maybe_unused]] const Pagina
 }
 
 template <typename ToolFunctions>
-ToolsListResult McpServer<ToolFunctions>::tools_list(const PaginatedRequest& params) {
-    ToolsListResult result = McpServer<void>::tools_list(params);
+auto McpServer<ToolFunctions>::toolsList(const PaginatedRequest& params) -> ToolsListResult {
+    ToolsListResult result = McpServer<void>::toolsList(params);
     if constexpr (std::is_empty_v<ToolFunctions> || std::is_void_v<ToolFunctions>) {
         return result;
     } else {
@@ -274,11 +295,11 @@ ToolsListResult McpServer<ToolFunctions>::tools_list(const PaginatedRequest& par
     }
 }
 
-inline auto McpServer<void>::_tools_list(PaginatedRequest params) -> IoTask<ToolsListResult> {
-    co_return tools_list(params);
+inline auto McpServer<void>::_tools_list(PaginatedRequest params) noexcept -> IoTask<ToolsListResult> {
+    co_return toolsList(params);
 }
 
-inline auto McpServer<void>::_cancelled(CancelledNotificationParams params) -> IoTask<void> {
+inline auto McpServer<void>::_cancelled(CancelledNotificationParams params) noexcept -> IoTask<void> {
     NEKO_LOG_INFO("mcp server", "cancell {} beacuse {}",
                   params.requestId.index() == 0 ? std::to_string(std::get<0>(params.requestId))
                                                 : std::get<1>(params.requestId),
@@ -294,7 +315,7 @@ inline auto McpServer<void>::_cancelled(CancelledNotificationParams params) -> I
     co_return {};
 }
 
-inline auto McpServer<void>::_tools_call(ToolCallRequestParams params) -> IoTask<CallToolResult> {
+inline auto McpServer<void>::_tools_call(ToolCallRequestParams params) noexcept -> IoTask<CallToolResult> {
     auto time = std::chrono::high_resolution_clock::now();
     CallToolResult result{.content = {}, .isError = true, .metadata = {}};
     ToolCallInfo info;
@@ -315,8 +336,8 @@ inline auto McpServer<void>::_tools_call(ToolCallRequestParams params) -> IoTask
     co_return result;
 }
 
-inline auto McpServer<void>::register_local_file_resource(std::string_view name, std::filesystem::path path,
-                                                          std::string_view uri, std::string_view description) -> bool {
+inline auto McpServer<void>::registerLocalFileResource(std::string_view name, std::filesystem::path path,
+                                                       std::string_view uri, std::string_view description) -> bool {
     if (!std::filesystem::exists(path)) {
         return false;
     }
@@ -327,10 +348,11 @@ inline auto McpServer<void>::register_local_file_resource(std::string_view name,
         resource.description = std::string(description);
     }
     resource.metadata = ResourceMetadata{.type = "file", .size = std::filesystem::file_size(path)};
-    register_resource(resource, [path = path, uri = resource.uri](std::optional<Meta>) -> ResourceContentsT {
+    registerResource(resource, [path = path, uri = resource.uri](std::optional<Meta>) -> ResourceContentsT {
         auto file = std::ifstream(path, std::ios::binary);
         BlobResourceContents contents;
-        contents.uri = uri;
+        contents.uri      = uri;
+        contents.mimeType = "application/octet-stream";
         if (file.is_open()) {
             auto data = Base64Covert::Encode({std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()});
             contents.blob = std::string(data.begin(), data.end());
@@ -340,20 +362,20 @@ inline auto McpServer<void>::register_local_file_resource(std::string_view name,
     return true;
 }
 
-inline auto McpServer<void>::register_resource(Resource resource, ResourceContentsT contents) -> void {
-    register_resource(resource,
-                      [contents = std::move(contents)](std::optional<Meta>) -> ResourceContentsT { return contents; });
+inline auto McpServer<void>::registerResource(Resource resource, ResourceContentsT contents) -> void {
+    registerResource(resource,
+                     [contents = std::move(contents)](std::optional<Meta>) -> ResourceContentsT { return contents; });
 }
 
-inline auto McpServer<void>::register_resource(Resource resource,
-                                               std::function<ResourceContentsT(std::optional<Meta>)> contents) -> void {
+inline auto McpServer<void>::registerResource(Resource resource,
+                                              std::function<ResourceContentsT(std::optional<Meta>)> contents) -> void {
     mResources[resource.uri] = contents;
     mResourceList.push_back(resource);
 }
 
 template <typename Ret, typename... Args>
-auto McpServer<void>::register_tool_function(std::string_view name, std::function<Ret(Args...)> func,
-                                             std::string_view description) -> bool {
+auto McpServer<void>::registerToolFunction(std::string_view name, std::function<Ret(Args...)> func,
+                                           std::string_view description) -> bool {
     if (mHandlers.find(name) != mHandlers.end()) {
         return false;
     }
@@ -368,8 +390,8 @@ auto McpServer<void>::register_tool_function(std::string_view name, std::functio
 }
 
 template <typename Ret, typename... Args>
-auto McpServer<void>::register_tool_function(std::string_view name, std::function<IoTask<Ret>(Args...)> func,
-                                             std::string_view description) -> bool {
+auto McpServer<void>::registerToolFunction(std::string_view name, std::function<IoTask<Ret>(Args...)> func,
+                                           std::string_view description) -> bool {
     if (mHandlers.find(name) != mHandlers.end()) {
         return false;
     }

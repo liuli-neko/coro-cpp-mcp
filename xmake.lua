@@ -69,7 +69,7 @@ target("coro-cpp-mcp")
     set_kind("headeronly")
 
     add_options("custom_namespace")
-
+    set_pcxxheader("include/ccmcp/global/global.hpp")
     add_headerfiles("include/(ccmcp/**.hpp)")
     set_configvar("CCMCP_NAMESPACE", "$(custom_namespace)")
     add_packages("ilias", "neko-proto-tools", "fmt", {public = true})

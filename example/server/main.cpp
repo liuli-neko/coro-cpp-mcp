@@ -58,7 +58,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     ILIAS_NAMESPACE::PlatformContext platform;
     McpServer<MCPTools> server(platform);
-    server.set_instructions("This is a test server");
+    server.setInstructions("This is a test server");
+    server.setCapabilities(ToolsCapability{});
     server->add.paramsDescription = {{"a", "first number"}, {"b", "second number"}};
     server->add                   = [](TowParams params) { return params.a + params.b; };
     server->mult                  = [](TowParams params) { return params.a * params.b; };
@@ -66,14 +67,14 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     server->sub                   = [](TowParams params) { return params.a - params.b; };
     server->echo                  = [](EchoParams params) { return params.message; };
     server->hello_unicode         = [](HelloParams params) { return params.greeting + " " + params.name; };
-    server.register_tool_function("list_emoji_categories", std::function([]() {
-                                      std::vector<std::string> categories = {
-                                          "😀 Smileys & Emotion", "👋 People & Body", "🐶 Animals & Nature",
-                                          "🍎 Food & Drink",      "⚽ Activities",    "🌍 Travel & Places",
-                                          "💡 Objects",           "❤️ Symbols",        "🚩 Flags"};
-                                      return categories;
-                                  }),
-                                  "🎨 Tool that returns a list of emoji categories");
+    server.registerToolFunction("list_emoji_categories", std::function([]() {
+                                    std::vector<std::string> categories = {
+                                        "😀 Smileys & Emotion", "👋 People & Body", "🐶 Animals & Nature",
+                                        "🍎 Food & Drink",      "⚽ Activities",    "🌍 Travel & Places",
+                                        "💡 Objects",           "❤️ Symbols",        "🚩 Flags"};
+                                    return categories;
+                                }),
+                                "🎨 Tool that returns a list of emoji categories");
 
     // TODO: add server code here
     ilias_wait server.start<Stdio>("stdio://stdout-stdin");

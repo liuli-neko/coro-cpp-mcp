@@ -2,12 +2,16 @@
 
 #include "ccmcp/global/global.hpp"
 
-#include <nekoproto/jsonrpc/jsonrpc.hpp>
-
 #include "ccmcp/model/capabilities.hpp"
 
 CCMCP_BN
 struct EmptyRequestParams {
+    std::optional<Meta> _meta;
+
+    NEKO_SERIALIZER(_meta)
+};
+
+struct EmptyResult {
     std::optional<Meta> _meta;
 
     NEKO_SERIALIZER(_meta)
@@ -322,6 +326,7 @@ struct McpJsonRpcMethods {
     RpcMethod<ListRootsResult(EmptyRequestParams), "roots/list"> rootsList;
     RpcMethod<void(EmptyRequestParams), "notifications/roots/list_changed"> rootsListChanged;
     RpcMethod<void(CancelledNotificationParams), "notifications/cancelled"> cancelled;
+    RpcMethod<EmptyResult(EmptyRequestParams), "ping"> ping;
 };
 } // namespace detail
 

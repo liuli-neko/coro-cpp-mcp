@@ -52,6 +52,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     ILIAS_NAMESPACE::PlatformContext platform;
     McpServer<MCPTools> server(platform); // 创建服务,并自动注册MCPTools中的函数
     server.set_instructions("This is a test server");   // 设置说明(可选)
+    server.setCapabilities(ResourcesCapability{.subscribe = {}, .list_changed = {}}); // 设置能力(可选)
     server->add.paramsDescription({{"a", "first number"}, {"b", "second number"}}); // 设置参数说明(可选)
     server.register_tool_function("mult", std::function([](Params p) { return p.a * p.b;})); // 通过函数注册函数
 

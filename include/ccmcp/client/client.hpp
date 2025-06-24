@@ -1,11 +1,6 @@
 #pragma once
 
-#pragma once
-
 #include "ccmcp/global/global.hpp"
-
-#include <ilias/sync/scope.hpp>
-#include <nekoproto/jsonrpc/jsonrpc.hpp>
 
 #include "ccmcp/model/jsonrpc_protocol.hpp"
 
@@ -79,6 +74,18 @@ protected:
 public:
     McpClient(IoContext& ctxt) : mClient(ctxt) {}
     virtual ~McpClient() = default;
+    auto setCapabilities(const ExperimentalCapabilities& capabilities) -> void {
+        mCapabilities.experimental = capabilities;
+    }
+    auto setCapabilities(const RootsCapabilities& capabilities) -> void { mCapabilities.roots = capabilities; }
+    auto setCapabilities(const SamplingCapability& capabilities) -> void { mCapabilities.sampling = capabilities; }
+    auto makeInitializeRequestParams() {
+        return InitializeRequestParams{.protocolVersion = LATEST_PROTOCOL_VERSION,
+                                       .capabilities    = mCapabilities,
+                                       .clientInfo =
+                                           Implementation{.name = CCMCP_PROJECT_NAME, .version = CCMCP_VERSION_STRING},
+                                       ._meta = {}};
+    }
 
     auto connect(std::string_view url) -> Task<bool> { return mClient.connect(url); }
     template <typename StreamType>
@@ -134,6 +141,7 @@ public:
 
 private:
     JsonRpcClient<detail::McpJsonRpcMethods> mClient;
+    ClientCapabilities mCapabilities;
 };
 
 template <typename ToolFunctions>

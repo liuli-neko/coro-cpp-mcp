@@ -2,10 +2,6 @@
 
 #include "ccmcp/global/global.hpp"
 
-#include <charconv>
-#include <nekoproto/serialization/serializer_base.hpp>
-#include <nekoproto/serialization/types/types.hpp>
-
 CCMCP_BN
 
 enum class Role {
@@ -35,10 +31,11 @@ struct Annotations {
 };
 
 struct BlobResourceContents {
-    std::optional<std::string> uri;
+    std::string uri;
     std::string blob;
+    std::optional<std::string> mimeType;
 
-    NEKO_SERIALIZER(uri, blob)
+    NEKO_SERIALIZER(uri, blob, mimeType)
 };
 
 struct ResourceMetadata {
@@ -75,18 +72,12 @@ struct ResourceTemplate {
     NEKO_SERIALIZER(uriTemplate, name, description, metadata, annotations)
 };
 
-struct ResourceContents {
+struct TextResourceContents {
     std::string uri;
+    std::string text;
     std::optional<std::string> mimeType;
 
-    NEKO_SERIALIZER(uri, mimeType)
-};
-
-struct TextResourceContents {
-    std::optional<std::string> uri;
-    std::string text;
-
-    NEKO_SERIALIZER(uri, text)
+    NEKO_SERIALIZER(uri, text, mimeType)
 };
 
 struct TextContent {

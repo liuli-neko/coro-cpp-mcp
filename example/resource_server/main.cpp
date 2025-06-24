@@ -28,27 +28,28 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     ILIAS_NAMESPACE::PlatformContext platform;
     McpServer<void> server(platform);
-    server.set_instructions("This is a test resource server");
+    server.setInstructions("This is a test resource server");
+    server.setCapabilities(ResourcesCapability{.subscribe = {}, .list_changed = {}});
     // add a local file resource
-    auto logFile = (std::filesystem::current_path() / "log.txt").string();
-    server.register_local_file_resource("log", logFile);
+    auto logFile = ("E:\\workplace\\coro-cpp-mcp\\build\\bin\\log.txt");
+    server.registerLocalFileResource("log", logFile);
     // add a custom static resource
-    server.register_resource({.uri         = "my_uri",
-                              .name        = "my_name",
-                              .description = "my github name",
-                              .metadata    = std::nullopt,
-                              .annotations = std::nullopt},
-                             TextResourceContents{.uri = "my_uri", .text = "liuli-neko"});
+    server.registerResource({.uri         = "my_uri",
+                             .name        = "my_name",
+                             .description = "my github name",
+                             .metadata    = std::nullopt,
+                             .annotations = std::nullopt},
+                            TextResourceContents{.uri = "my_uri", .text = "liuli-neko"});
     // add a custom dynamic resource
-    server.register_resource({.uri         = "my_uri2",
-                              .name        = "my_name2",
-                              .description = "my github name2",
-                              .metadata    = std::nullopt,
-                              .annotations = std::nullopt},
-                             [](std::optional<ccmcp::Meta> meta) {
-                                 // you can use the meta to determine what to return
-                                 return TextResourceContents{.uri = "my_uri2", .text = "https://github.com/liuli-neko"};
-                             });
+    server.registerResource({.uri         = "my_uri2",
+                             .name        = "my_name2",
+                             .description = "my github name2",
+                             .metadata    = std::nullopt,
+                             .annotations = std::nullopt},
+                            [](std::optional<ccmcp::Meta> meta) {
+                                // you can use the meta to determine what to return
+                                return TextResourceContents{.uri = "my_uri2", .text = "https://github.com/liuli-neko"};
+                            });
 
     // TODO: add server code here
     ilias_wait server.start<Stdio>("stdio://stdout-stdin");

@@ -1,8 +1,5 @@
 #pragma once
-
-#include <any>
-#include <nekoproto/jsonrpc/jsonrpc.hpp>
-#include <tuple>
+#include "ccmcp/global/global.hpp"
 
 #include "capabilities.hpp"
 
@@ -18,10 +15,15 @@ template <typename Ret, typename SerializableT>
 struct ToolFunctionTraits<Ret(SerializableT)> {
     using ParamsT = SerializableT;
     using ReturnT = Ret;
+#if __cpp_lib_move_only_function >= 202110L
+    using FunctionT = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+#else
+    using FunctionT = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+#endif
     auto operator()(ParamsT&& params) const { return function(std::forward<ParamsT>(params)); }
 
 protected:
-    std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)> function;
+    mutable FunctionT function;
 };
 template <typename Ret, typename SerializableT>
     requires NEKO_NAMESPACE::detail::has_values_meta<SerializableT> &&
@@ -29,31 +31,46 @@ template <typename Ret, typename SerializableT>
 struct ToolFunctionTraits<std::function<Ret(SerializableT)>> {
     using ParamsT = SerializableT;
     using ReturnT = Ret;
+#if __cpp_lib_move_only_function >= 202110L
+    using FunctionT = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+#else
+    using FunctionT = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+#endif
 
     auto operator()(ParamsT&& params) const { return function(std::forward<ParamsT>(params)); }
 
 protected:
-    std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)> function;
+    mutable FunctionT function;
 };
 template <typename Ret>
 struct ToolFunctionTraits<Ret()> {
     using ParamsT = void;
     using ReturnT = Ret;
+#if __cpp_lib_move_only_function >= 202110L
+    using FunctionT = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+#else
+    using FunctionT = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+#endif
 
     auto operator()() const { return function(); }
 
 protected:
-    std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)> function;
+    mutable FunctionT function;
 };
 template <typename Ret>
 struct ToolFunctionTraits<std::function<Ret()>> {
     using ParamsT = void;
     using ReturnT = Ret;
+#if __cpp_lib_move_only_function >= 202110L
+    using FunctionT = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+#else
+    using FunctionT = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+#endif
 
     auto operator()() const { return function(); }
 
 protected:
-    std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)> function;
+    mutable FunctionT function;
 };
 } // namespace traits
 
@@ -62,6 +79,7 @@ struct DynamicToolFunction : traits::ToolFunctionTraits<T> {
     using TypeTraits = traits::ToolFunctionTraits<T>;
     using ParamsT    = TypeTraits::ParamsT;
     using ReturnT    = TypeTraits::ReturnT;
+    using FunctionT  = TypeTraits::FunctionT;
 
     DynamicToolFunction(std::string_view name, std::string_view description) : name(name), description(description) {}
 
@@ -84,18 +102,24 @@ struct DynamicToolFunction : traits::ToolFunctionTraits<T> {
         tl.inputSchema     = std::make_shared<JsonSchema>(std::move(inputSchema));
         return tl;
     }
+#if __cpp_lib_move_only_function >= 202110L
+    auto& operator=(std::move_only_function<ReturnT(ParamsT)> func) {
+#else
     auto& operator=(std::function<ReturnT(ParamsT)> func) {
+#endif
         if constexpr (std::is_void_v<ParamsT>) {
-            this->function = [func]() -> ILIAS_NAMESPACE::IoTask<ReturnT> { co_return func(); };
+            this->function = [func = std::move(func)]() mutable -> ILIAS_NAMESPACE::IoTask<ReturnT> {
+                co_return func();
+            };
         } else {
-            this->function = [func](ParamsT params) -> ILIAS_NAMESPACE::IoTask<ReturnT> {
+            this->function = [func = std::move(func)](ParamsT params) mutable -> ILIAS_NAMESPACE::IoTask<ReturnT> {
                 co_return func(std::move(params));
             };
         }
         return *this;
     }
-    auto& operator=(std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)> func) {
-        this->function = func;
+    auto& operator=(FunctionT func) {
+        this->function = std::move(func);
         return *this;
     }
     operator bool() const { return this->function != nullptr; }

@@ -1,15 +1,14 @@
 #pragma once
 
 #include "ccmcp/global/global.hpp"
-#include "ccmcp/model/base.hpp"
 
-#include <nekoproto/jsonrpc/jsonrpc.hpp>
-#include <nekoproto/serialization/json/schema.hpp>
+#include "ccmcp/model/base.hpp"
 
 CCMCP_BN
 using NEKO_NAMESPACE::JsonSchema;
 using JsonValue                = NEKO_NAMESPACE::JsonSerializer::JsonValue;
 using ExperimentalCapabilities = std::map<std::string, JsonValue>;
+using CompletionsCapability = JsonValue;
 
 struct RootsCapabilities {
     bool list_changed;
@@ -65,7 +64,7 @@ struct ClientCapabilities {
 struct ServerCapabilities {
     std::optional<ExperimentalCapabilities> experimental;
     std::optional<LoggingCapability> logging;
-    std::optional<JsonValue> completions;
+    std::optional<CompletionsCapability> completions;
     std::optional<PromptsCapability> prompts;
     std::optional<ResourcesCapability> resources;
     std::optional<ToolsCapability> tools;
