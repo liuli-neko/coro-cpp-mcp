@@ -76,5 +76,6 @@ target("coro-cpp-mcp")
     add_includedirs("include", {public = true})
 target_end()
 
+includes("external/xmake.lua")
 includes("example/*/xmake.lua")
 includes("test/xmake.lua")
