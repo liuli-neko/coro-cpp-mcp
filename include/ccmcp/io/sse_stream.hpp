@@ -15,7 +15,7 @@ static constexpr std::string_view SSE_DEFAULT_HOST   = "localhost";
 static constexpr std::string_view SSE_DEFAULT_SCHEME = "http";
 
 template <>
-class DatagramClient<SseClient, void> : public DatagramBase, public DatagramClientBase {
+class MessageStream<SseClient, void> : public IMessageStream, public IMessageStreamClient {
     using HttpSession = ILIAS_NAMESPACE::HttpSession;
     using Url         = ILIAS_NAMESPACE::Url;
     using IliasError  = ILIAS_NAMESPACE::Error;
@@ -30,8 +30,8 @@ class DatagramClient<SseClient, void> : public DatagramBase, public DatagramClie
     using HttpReply   = ILIAS_NAMESPACE::HttpReply;
 
 public:
-    DatagramClient() = default;
-    DatagramClient(HttpSession&& mClient) : mClient(std::make_unique<HttpSession>(std::move(mClient))) {}
+    MessageStream() = default;
+    MessageStream(HttpSession&& mClient) : mClient(std::make_unique<HttpSession>(std::move(mClient))) {}
 
     auto recv() -> IoTask<std::span<std::byte>> override {
         if (mIsCancel) {
@@ -111,7 +111,7 @@ private:
 };
 
 template <>
-class DatagramClient<SseServer, void> : public DatagramBase, public DatagramServerBase {
+class MessageStream<SseServer, void> : public IMessageStream, public IMessageStreamServer {
     using IliasError = ILIAS_NAMESPACE::Error;
     template <typename T>
     using Unexpected = ILIAS_NAMESPACE::Unexpected<T>;
@@ -168,7 +168,7 @@ public:
         }
     }
 
-    auto accept() -> IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> override {
+    auto accept() -> IoTask<std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>> override {
         if (!listener) {
             co_return Unexpected(JsonRpcError::ClientNotInit);
         }
@@ -178,9 +178,9 @@ public:
         if (auto ret = co_await listener.accept(); ret) {
             mClient = std::make_unique<HttpSession>(std::move(ret.value().first));
 
-            co_return std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>(
+            co_return std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>(
                 new DatagramClient<TcpClient>(std::move(ret.value().first)),
-                +[](DatagramClientBase* ptr) { delete ptr; });
+                +[](IMessageStreamClient* ptr) { delete ptr; });
         } else {
             co_return Unexpected(ret.error());
         }

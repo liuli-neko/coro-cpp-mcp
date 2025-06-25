@@ -38,6 +38,7 @@ protected:
             case 1:
                 return recover_content<T>(std::get<1>(content));
             case 2:
+            default:
                 return std::optional<T>{std::nullopt};
             }
         };

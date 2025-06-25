@@ -11,7 +11,7 @@ NEKO_BEGIN_NAMESPACE
 struct Stdio {};
 
 template <>
-class DatagramClient<Stdio, void> : public DatagramBase, public DatagramClientBase, public DatagramServerBase {
+class MessageStream<Stdio, void> : public IMessageStream, public IMessageStreamClient, public IMessageStreamServer {
     using Console = ILIAS_NAMESPACE::Console;
     template <typename T>
     using IoTask = ILIAS_NAMESPACE::IoTask<T>;
@@ -20,7 +20,7 @@ class DatagramClient<Stdio, void> : public DatagramBase, public DatagramClientBa
     using IliasError = ILIAS_NAMESPACE::Error;
 
 public:
-    DatagramClient() {}
+    MessageStream() {}
 
     auto recv() -> IoTask<std::span<std::byte>> override {
         if (!mIn) {
@@ -119,8 +119,9 @@ public:
     auto isConnected() -> bool override { return (bool)mIn && (bool)mOut; }
     auto isListening() -> bool override { return (bool)mIn && (bool)mOut; }
 
-    auto accept() -> IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> override {
-        co_return std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>(this, [](DatagramClientBase*) {});
+    auto accept() -> IoTask<std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>> override {
+        co_return std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>(this,
+                                                                                         [](IMessageStreamClient*) {});
     }
 
 private:
