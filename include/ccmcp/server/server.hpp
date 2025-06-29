@@ -61,11 +61,11 @@ public:
     auto setCapabilities(const ToolsCapability& capabilities) noexcept -> void;
     void setInstructions(std::string_view instructions) noexcept;
     virtual auto toolsList(const PaginatedRequest&) -> ToolsListResult;
-    auto start(std::string_view url) -> Task<bool>;
     template <typename StreamType>
-    auto start(std::string_view url) -> IoTask<IliasError>;
+    auto addTransport(StreamType&& stream) -> void;
+    template <typename ListenerType>
+    auto setListener(ListenerType&& listener) -> void;
     auto close() -> void;
-    auto isRunning() -> bool { return mServer.isListening(); }
     auto wait() -> Task<void> { co_await mServer.wait(); }
     template <typename Ret, typename... Args>
     auto registerToolFunction(std::string_view name, std::function<Ret(Args...)> func,
@@ -266,11 +266,14 @@ inline auto McpServer<void>::_initialized(EmptyRequestParams) noexcept -> IoTask
     co_return {};
 }
 
-inline auto McpServer<void>::start(std::string_view url) -> Task<bool> { return mServer.start(url); }
-
 template <typename StreamType>
-auto McpServer<void>::start(std::string_view url) -> IoTask<IliasError> {
-    return mServer.start<StreamType>(url);
+inline auto McpServer<void>::addTransport(StreamType&& stream) -> void {
+    mServer.addTransport(std::forward<StreamType>(stream));
+}
+
+template <typename ListenerType>
+inline auto McpServer<void>::setListener(ListenerType&& listener) -> void {
+    mServer.setListener(std::forward<ListenerType>(listener));
 }
 
 inline auto McpServer<void>::close() -> void { mServer.close(); }

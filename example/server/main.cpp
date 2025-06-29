@@ -77,7 +77,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
                                 "🎨 Tool that returns a list of emoji categories");
 
     // TODO: add server code here
-    ilias_wait server.start<Stdio>("stdio://stdout-stdin");
+    StdioStream stdio;
+    ilias_wait stdio.start();
+    server.addTransport(std::move(stdio));
     ilias_wait server.wait();
 
     return 0;

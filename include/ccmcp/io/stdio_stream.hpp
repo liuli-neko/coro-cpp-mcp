@@ -4,14 +4,11 @@
 
 #include <ilias/fs/console.hpp>
 #include <nekoproto/global/log.hpp>
-#include <nekoproto/jsonrpc/datagram_wapper.hpp>
+#include <nekoproto/jsonrpc/message_stream_wrapper.hpp>
 
 NEKO_BEGIN_NAMESPACE
 
-struct Stdio {};
-
-template <>
-class MessageStream<Stdio, void> : public IMessageStream, public IMessageStreamClient, public IMessageStreamServer {
+class StdioStream {
     using Console = ILIAS_NAMESPACE::Console;
     template <typename T>
     using IoTask = ILIAS_NAMESPACE::IoTask<T>;
@@ -20,14 +17,11 @@ class MessageStream<Stdio, void> : public IMessageStream, public IMessageStreamC
     using IliasError = ILIAS_NAMESPACE::Error;
 
 public:
-    MessageStream() {}
+    StdioStream() {}
 
-    auto recv() -> IoTask<std::span<std::byte>> override {
+    auto recv(std::vector<std::byte>& buffer) -> IoTask<void> {
         if (!mIn) {
             co_return Unexpected(JsonRpcError::ClientNotInit);
-        }
-        if (mIsCancel) {
-            co_return Unexpected(IliasError::Canceled);
         }
         auto ret = co_await (mIn.getline("\n") | ILIAS_NAMESPACE::ignoreCancellation);
         if (ret) {
@@ -36,46 +30,34 @@ public:
             if (mJson.find('{') == std::string::npos && mJson.find('[') == std::string::npos &&
                 mJson.find("exit") != std::string::npos) {
                 NEKO_LOG_INFO("DatagramClient", "exit");
-                mIsCancel = true;
                 co_return Unexpected<IliasError>(IliasError::Canceled);
             }
-            co_return std::span<std::byte>{reinterpret_cast<std::byte*>(mJson.data()), mJson.size()};
+            buffer = std::vector<std::byte>{reinterpret_cast<std::byte*>(mJson.data()),
+                                            reinterpret_cast<std::byte*>(mJson.data()) + mJson.size()};
+            co_return {};
         } else {
             co_return Unexpected<IliasError>(ret.error());
         }
     }
 
-    auto send(std::span<const std::byte> data) -> IoTask<void> override {
-        if (!mOut) {
-            co_return Unexpected(JsonRpcError::ClientNotInit);
-        }
-        if (mIsCancel) {
-            co_return Unexpected(IliasError::Canceled);
-        }
+    auto send(std::span<const std::byte> data) -> IoTask<void> {
         // TODO: USE BETTER WAY
         ::fwrite(reinterpret_cast<const char*>(data.data()), 1, data.size(), stdout);
         ::fputc('\n', stdout);
         ::fflush(stdout);
-        // auto ret = co_await (mOut.writeAll(ILIAS_NAMESPACE::makeBuffer(mJson)) |
-        // ILIAS_NAMESPACE::ignoreCancellation); if (!ret) { co_return
-        // Unexpected<IliasError>(ret.error());
-        // }
-        // NEKO_LOG_INFO("ccmcp", "Sent {}", std::string_view{reinterpret_cast<const char*>(data.data()), data.size()});
         co_return {};
     }
 
-    auto close() -> void override {
+    auto close() -> void {
         if (mIn) {
             mIn.close();
         }
         if (mOut) {
             mOut.close();
         }
-        mIsCancel = false;
     }
 
-    auto cancel() -> void override {
-        mIsCancel = true;
+    auto cancel() -> void {
         if (mIn) {
             mIn.cancel();
         }
@@ -84,51 +66,25 @@ public:
         }
     }
 
-    // like stdio://stdout-stdin
-    auto checkProtocol([[maybe_unused]] Type type, std::string_view url) -> bool override {
-        return !(url.substr(0, 8) != "stdio://");
-    }
-
-    auto start(std::string_view url) -> IoTask<void> override {
-        mIsCancel = false;
-        auto type = url.substr(9);
-        if (type.find("stdin")) {
-            if (auto ret = co_await Console::fromStdin(); ret) {
-                mIn = std::move(ret.value());
-            } else {
-                co_return Unexpected(ret.error());
-            }
+    auto start() -> IoTask<void> {
+        if (auto ret = co_await Console::fromStdin(); ret) {
+            mIn = std::move(ret.value());
+        } else {
+            co_return Unexpected(ret.error());
         }
-        if (type.find("stdout")) {
-            if (auto ret = co_await Console::fromStdout(); ret) {
-                mOut = std::move(ret.value());
-            } else {
-                co_return Unexpected(ret.error());
-            }
-        }
-        if (type.find("stderr")) {
-            if (auto ret = co_await Console::fromStderr(); ret) {
-                mOut = std::move(ret.value());
-            } else {
-                co_return Unexpected(ret.error());
-            }
-        }
+        // ilias console out has bug in this version in mcp-server
+        // if (auto ret = co_await Console::fromStdout(); ret) {
+        //     mOut = std::move(ret.value());
+        // } else {
+        //     co_return Unexpected(ret.error());
+        // }
         co_return {};
-    }
-
-    auto isConnected() -> bool override { return (bool)mIn && (bool)mOut; }
-    auto isListening() -> bool override { return (bool)mIn && (bool)mOut; }
-
-    auto accept() -> IoTask<std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>> override {
-        co_return std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>(this,
-                                                                                         [](IMessageStreamClient*) {});
     }
 
 private:
     Console mIn;
     Console mOut;
     std::string mJson;
-    bool mIsCancel = false;
 };
 
 NEKO_END_NAMESPACE

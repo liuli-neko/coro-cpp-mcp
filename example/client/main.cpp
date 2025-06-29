@@ -61,7 +61,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     McpClient<MCPTools> client(platform);
 
     // TODO: add server code here
-    ilias_wait client.connect<Stdio>("stdio://stdout-stdin");
+    StdioStream stdio;
+    ilias_wait stdio.start();
+    client.setTransport(std::move(stdio));
     auto ret = ilias_wait client->add({.a = 5, .b = 2});
     std::cout << "add: " << ret.value_or(-1) << std::endl;
 

@@ -88,10 +88,9 @@ public:
                                        ._meta = {}};
     }
 
-    auto connect(std::string_view url) -> Task<bool> { return mClient.connect(url); }
     template <typename StreamType>
-    auto connect(std::string_view url) -> IoTask<IliasError> {
-        return mClient.connect<StreamType>(url);
+    auto setTransport(StreamType&& transport) -> void {
+        return mClient.setTransport(std::forward<StreamType>(transport));
     }
     auto close() -> void { mClient.close(); }
     auto isConnected() const -> bool { return mClient.isConnected(); }
@@ -107,8 +106,8 @@ public:
         if (result.isError) {
             co_return Unexpected(IliasError::Unknown);
         }
-        if (auto ret = handlerCallResult<RetT>(result.content); ret) {
-            co_return *ret;
+        if (auto ret1 = handlerCallResult<RetT>(result.content); ret1) {
+            co_return *ret1;
         } else {
             co_return Unexpected(IliasError::Unknown);
         }

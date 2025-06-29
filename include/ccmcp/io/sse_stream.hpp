@@ -4,7 +4,7 @@
 
 #include <ilias/http.hpp>
 #include <nekoproto/global/log.hpp>
-#include <nekoproto/jsonrpc/datagram_wapper.hpp>
+#include <nekoproto/jsonrpc/message_stream_wrapper.hpp>
 
 NEKO_BEGIN_NAMESPACE
 struct SseClient {};
