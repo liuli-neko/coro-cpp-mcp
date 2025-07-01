@@ -45,7 +45,7 @@ protected:
         RetT respon;
         if constexpr (NEKO_NAMESPACE::detail::has_values_meta<RetT>) {
             int idx = 0;
-            Reflect<RetT>::forEachWithoutName(respon, [&contents, &idx](auto& field) {
+            Reflect<RetT>::forEachWithoutName(respon, [&contents, &idx, &rc](auto& field) {
                 if (auto val = rc(contents[idx++], std::decay_t<decltype(field)>{}); val) {
                     field = *val;
                 }

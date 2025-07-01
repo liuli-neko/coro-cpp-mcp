@@ -23,8 +23,7 @@ public:
         if (!mIn) {
             co_return Unexpected(JsonRpcError::ClientNotInit);
         }
-        auto ret = co_await (mIn.getline("\n") | ILIAS_NAMESPACE::ignoreCancellation);
-        if (ret) {
+        if (auto ret = co_await (mIn.getline("\n") | ILIAS_NAMESPACE::ignoreCancellation); ret) {
             std::swap(mJson, ret.value());
             NEKO_LOG_INFO("DatagramClient", "recv: {}", mJson);
             if (mJson.find('{') == std::string::npos && mJson.find('[') == std::string::npos &&

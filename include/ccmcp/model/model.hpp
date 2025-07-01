@@ -16,9 +16,11 @@ struct ToolFunctionTraits<Ret(SerializableT)> {
     using ParamsT = SerializableT;
     using ReturnT = Ret;
 #if __cpp_lib_move_only_function >= 202110L
-    using FunctionT = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionT    = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionTRaw = std::move_only_function<ReturnT(ParamsT)>;
 #else
-    using FunctionT = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionT    = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionTRaw = std::function<ReturnT(ParamsT)>;
 #endif
     auto operator()(ParamsT&& params) const { return function(std::forward<ParamsT>(params)); }
 
@@ -32,9 +34,11 @@ struct ToolFunctionTraits<std::function<Ret(SerializableT)>> {
     using ParamsT = SerializableT;
     using ReturnT = Ret;
 #if __cpp_lib_move_only_function >= 202110L
-    using FunctionT = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionT    = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionTRaw = std::move_only_function<ReturnT(ParamsT)>;
 #else
-    using FunctionT = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionT    = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionTRaw = std::function<ReturnT(ParamsT)>;
 #endif
 
     auto operator()(ParamsT&& params) const { return function(std::forward<ParamsT>(params)); }
@@ -47,9 +51,11 @@ struct ToolFunctionTraits<Ret()> {
     using ParamsT = void;
     using ReturnT = Ret;
 #if __cpp_lib_move_only_function >= 202110L
-    using FunctionT = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionT    = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>()>;
+    using FunctionTRaw = std::move_only_function<ReturnT()>;
 #else
-    using FunctionT = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionT    = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>()>;
+    using FunctionTRaw = std::function<ReturnT()>;
 #endif
 
     auto operator()() const { return function(); }
@@ -62,9 +68,11 @@ struct ToolFunctionTraits<std::function<Ret()>> {
     using ParamsT = void;
     using ReturnT = Ret;
 #if __cpp_lib_move_only_function >= 202110L
-    using FunctionT = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionT    = std::move_only_function<ILIAS_NAMESPACE::IoTask<ReturnT>()>;
+    using FunctionTRaw = std::move_only_function<ReturnT()>;
 #else
-    using FunctionT = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>(ParamsT)>;
+    using FunctionT    = std::function<ILIAS_NAMESPACE::IoTask<ReturnT>()>;
+    using FunctionTRaw = std::function<ReturnT()>;
 #endif
 
     auto operator()() const { return function(); }
@@ -80,6 +88,7 @@ struct DynamicToolFunction : traits::ToolFunctionTraits<T> {
     using ParamsT    = TypeTraits::ParamsT;
     using ReturnT    = TypeTraits::ReturnT;
     using FunctionT  = TypeTraits::FunctionT;
+    using FunctionTRaw  = TypeTraits::FunctionTRaw;
 
     DynamicToolFunction(std::string_view name, std::string_view description) : name(name), description(description) {}
 
@@ -102,11 +111,8 @@ struct DynamicToolFunction : traits::ToolFunctionTraits<T> {
         tl.inputSchema     = std::make_shared<JsonSchema>(std::move(inputSchema));
         return tl;
     }
-#if __cpp_lib_move_only_function >= 202110L
-    auto& operator=(std::move_only_function<ReturnT(ParamsT)> func) {
-#else
-    auto& operator=(std::function<ReturnT(ParamsT)> func) {
-#endif
+
+    auto& operator=(FunctionTRaw func) {
         if constexpr (std::is_void_v<ParamsT>) {
             this->function = [func = std::move(func)]() mutable -> ILIAS_NAMESPACE::IoTask<ReturnT> {
                 co_return func();
@@ -129,7 +135,7 @@ struct DynamicToolFunction : traits::ToolFunctionTraits<T> {
     std::string description;
 };
 
-template <typename T, typename NEKO_NAMESPACE::ConstexprString FuncName>
+template <typename T, NEKO_NAMESPACE::ConstexprString FuncName>
 struct ToolFunction : DynamicToolFunction<T> {
     ToolFunction(std::string_view description) : DynamicToolFunction<T>(FuncName.view(), description) {}
     using DynamicToolFunction<T>::operator=;
