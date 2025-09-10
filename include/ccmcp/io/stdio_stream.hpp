@@ -3,6 +3,8 @@
 #include "../global/global.hpp"
 
 #include <ilias/fs/console.hpp>
+#include <ilias/io/stream.hpp>
+#include <ilias/task/task.hpp>
 #include <nekoproto/global/log.hpp>
 #include <nekoproto/jsonrpc/message_stream_wrapper.hpp>
 
@@ -13,8 +15,12 @@ class StdioStream {
     template <typename T>
     using IoTask = ILIAS_NAMESPACE::IoTask<T>;
     template <typename T>
+    using Task = ILIAS_NAMESPACE::Task<T>;
+    template <typename T>
     using Unexpected = ILIAS_NAMESPACE::Unexpected<T>;
-    using IliasError = ILIAS_NAMESPACE::Error;
+    using IliasError = ILIAS_NAMESPACE::IoError;
+    template <typename T>
+    using BufReader = ILIAS_NAMESPACE::BufReader<T>;
 
 public:
     StdioStream() {}
@@ -23,19 +29,19 @@ public:
         if (!mIn) {
             co_return Unexpected(JsonRpcError::ClientNotInit);
         }
-        if (auto ret = co_await (mIn.getline("\n") | ILIAS_NAMESPACE::ignoreCancellation); ret) {
+        if (auto ret = co_await (mIn.getline("\n") | ILIAS_NAMESPACE::unstoppable()); ret) {
             std::swap(mJson, ret.value());
             NEKO_LOG_INFO("DatagramClient", "recv: {}", mJson);
             if (mJson.find('{') == std::string::npos && mJson.find('[') == std::string::npos &&
                 mJson.find("exit") != std::string::npos) {
                 NEKO_LOG_INFO("DatagramClient", "exit");
-                co_return Unexpected<IliasError>(IliasError::Canceled);
+                co_return Unexpected(IliasError::Canceled);
             }
             buffer = std::vector<std::byte>{reinterpret_cast<std::byte*>(mJson.data()),
                                             reinterpret_cast<std::byte*>(mJson.data()) + mJson.size()};
             co_return {};
         } else {
-            co_return Unexpected<IliasError>(ret.error());
+            co_return Unexpected(ret.error());
         }
     }
 
@@ -49,25 +55,30 @@ public:
 
     auto close() -> void {
         if (mIn) {
-            mIn.close();
+            // FIXME: Ilias has a bug in BufReader
+            auto console = std::move(mIn).detach();
+            console.close();
         }
         if (mOut) {
-            mOut.close();
+            auto console = std::move(mOut).detach();
+            console.close();
         }
     }
 
     auto cancel() -> void {
         if (mIn) {
-            mIn.cancel();
+            auto& console = mIn.nextLayer();
+            console.cancel();
         }
         if (mOut) {
-            mOut.cancel();
+            auto& console = mOut.nextLayer();
+            console.cancel();
         }
     }
 
     auto start() -> IoTask<void> {
         if (auto ret = co_await Console::fromStdin(); ret) {
-            mIn = std::move(ret.value());
+            mIn = BufReader(std::move(ret.value()));
         } else {
             co_return Unexpected(ret.error());
         }
@@ -81,8 +92,8 @@ public:
     }
 
 private:
-    Console mIn;
-    Console mOut;
+    BufReader<Console> mIn;
+    BufReader<Console> mOut;
     std::string mJson;
 };
 

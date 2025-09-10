@@ -62,9 +62,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
     // TODO: add server code here
     StdioStream stdio;
-    ilias_wait stdio.start();
+    stdio.start().wait();
     client.setTransport(std::move(stdio));
-    auto ret = ilias_wait client->add({.a = 5, .b = 2});
+    auto ret = client->add({.a = 5, .b = 2}).wait();
     std::cout << "add: " << ret.value_or(-1) << std::endl;
 
     return 0;

@@ -5,7 +5,8 @@
 #include <charconv>
 #include <filesystem>
 #include <fstream>
-#include <ilias/sync/scope.hpp>
+#include <ilias/task/scope.hpp>
+#include <ilias/io/error.hpp>
 #include <nekoproto/jsonrpc/jsonrpc.hpp>
 #include <nekoproto/serialization/json/schema.hpp>
 #include <nekoproto/serialization/serializer_base.hpp>

@@ -39,7 +39,7 @@ struct MCPTools {
         "á é í ó ú ñ 漢字 🎉"};
 };
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+int ilias_main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 #if defined(_WIN32)
     ::SetConsoleCP(65001);
     ::SetConsoleOutputCP(65001);
@@ -78,9 +78,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
     // TODO: add server code here
     StdioStream stdio;
-    ilias_wait stdio.start();
+    co_await stdio.start();
     server.addTransport(std::move(stdio));
-    ilias_wait server.wait();
+    co_await server.wait();
 
-    return 0;
+    co_return 0;
 }

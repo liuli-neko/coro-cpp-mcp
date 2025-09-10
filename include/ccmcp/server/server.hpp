@@ -30,16 +30,19 @@ protected:
     template <typename T>
     using Task       = ILIAS_NAMESPACE::Task<T>;
     using IoContext  = ILIAS_NAMESPACE::IoContext;
-    using IliasError = ILIAS_NAMESPACE::Error;
-    using TaskScope  = ILIAS_NAMESPACE::TaskScope;
+    using IliasError = ILIAS_NAMESPACE::IoError;
+    template <typename T>
+    using TaskGroup  = ILIAS_NAMESPACE::TaskGroup<T>;
     template <typename T>
     using Unexpected = ILIAS_NAMESPACE::Unexpected<T>;
     template <typename T>
     using JsonRpcServer = NEKO_NAMESPACE::JsonRpcServer<T>;
     template <typename T>
+    using Result        = ILIAS_NAMESPACE::IoResult<T>;
+    template <typename T>
     using Reflect            = NEKO_NAMESPACE::Reflect<T>;
     using JsonSerializer     = NEKO_NAMESPACE::JsonSerializer;
-    using ScopedCancelHandle = ILIAS_NAMESPACE::ScopedCancelHandle;
+    using ScopedCancelHandle = ILIAS_NAMESPACE::StopHandle;
 
     void _register_rpc_methods();
     auto _initialize(InitializeRequestParams) noexcept -> IoTask<InitializeResult>;
@@ -82,7 +85,6 @@ public:
 protected:
     JsonRpcServer<detail::McpJsonRpcMethods> mServer;
     std::string mInstructions;
-    TaskScope mScope; // 针对tools_call的任务的管理
     std::map<std::string_view, std::unique_ptr<detail::RpcMethodWrapper>> mHandlers;
 
     // for tools
@@ -198,7 +200,7 @@ struct RpcMethodWrapperImpl : public RpcMethodWrapper {
     template <typename U>
     using IoTask = ILIAS_NAMESPACE::IoTask<U>;
     template <typename U>
-    using Result  = ILIAS_NAMESPACE::Result<U>;
+    using Result  = ILIAS_NAMESPACE::IoResult<U>;
     using MethodT = std::decay_t<typename RpcMethodType<T>::MethodT>;
     RpcMethodWrapperImpl(T method, McpServer<ToolFunctions>* self) : method(std::move(method)), self(self) {}
 
@@ -210,7 +212,7 @@ struct RpcMethodWrapperImpl : public RpcMethodWrapper {
         }
         using RetT = typename MethodT::ReturnT;
         CallToolResult result{.content = {}, .isError = true, .metadata = {}};
-        Result<RetT> respon = ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Unknown);
+        Result<RetT> respon = ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::IoError::Unknown);
         if constexpr (std::is_void_v<typename MethodT::ParamsT>) {
             respon = co_await (*method)();
         } else {
@@ -324,7 +326,7 @@ inline auto McpServer<void>::_tools_call(ToolCallRequestParams params) noexcept 
     ToolCallInfo info;
     if (auto item = mHandlers.find(params.name); item != mHandlers.end()) {
         JsonSerializer::InputSerializer in(params.arguments);
-        if (auto ret = co_await mScope.spawn((*item->second)(in)); ret) {
+        if (auto ret = co_await (*item->second)(in); ret) {
             result = ret.value();
         } else {
             result.isError = true;

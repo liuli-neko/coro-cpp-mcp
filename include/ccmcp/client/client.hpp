@@ -16,7 +16,7 @@ protected:
     template <typename T>
     using Task       = ILIAS_NAMESPACE::Task<T>;
     using IoContext  = ILIAS_NAMESPACE::IoContext;
-    using IliasError = ILIAS_NAMESPACE::Error;
+    using IliasError = ILIAS_NAMESPACE::IoError;
     using TaskScope  = ILIAS_NAMESPACE::TaskScope;
     template <typename T>
     using Unexpected = ILIAS_NAMESPACE::Unexpected<T>;
@@ -25,7 +25,7 @@ protected:
     template <typename T>
     using Reflect            = NEKO_NAMESPACE::Reflect<T>;
     using JsonSerializer     = NEKO_NAMESPACE::JsonSerializer;
-    using ScopedCancelHandle = ILIAS_NAMESPACE::ScopedCancelHandle;
+    using ScopedCancelHandle = ILIAS_NAMESPACE::StopHandle;
 
     template <typename RetT>
     auto handlerCallResult(const std::vector<std::variant<TextContent, ImageContent, EmbeddedResource>>& contents)
