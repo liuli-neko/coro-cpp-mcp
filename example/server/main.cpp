@@ -75,6 +75,12 @@ int ilias_main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
                                     return categories;
                                 }),
                                 "🎨 Tool that returns a list of emoji categories");
+    server.registerToolFunction("list_emoji").setDescription("Tool that returns a list of text emojis") = []() {
+        std::vector<std::string> emojis = {"~_~", ":-)", ":(",  ":-X", ":-Z", ":-Q", ":-T", ":-B",
+                                           ":-3", ":-|", ":-*", ":-$", ":-!", ":-@", ":-$", ":-#",
+                                           ":-&", ":-^", ":-(", ":-P", ":-D", ":-O", ":-S", ":-/"};
+        return emojis;
+    };
 
     // TODO: add server code here
     StdioStream stdio;

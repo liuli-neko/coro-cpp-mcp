@@ -1,5 +1,6 @@
 target("resource-server-example")
     set_kind("binary")
     set_targetdir("$(builddir)/bin")
+    add_includedirs("$(projectdir)/include")
     add_deps("coro-cpp-mcp")
     add_files("main.cpp")

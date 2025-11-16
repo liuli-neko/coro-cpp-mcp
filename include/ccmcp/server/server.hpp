@@ -20,6 +20,42 @@ struct RpcMethodWrapper {
     virtual auto call(JsonSerializer::InputSerializer& in) -> IoTask<CallToolResult> = 0;
     auto operator()(JsonSerializer::InputSerializer& in) -> IoTask<CallToolResult> { return call(in); }
 };
+
+template <typename McpServerT>
+class RegisterFunctionHelper {
+public:
+    RegisterFunctionHelper(McpServerT& server, std::string_view method_name)
+        : mServer(server), mMethodName(method_name) {}
+    RegisterFunctionHelper& setParameterDescription(std::string_view param, std::string_view description) {
+        mParameters[param] = description;
+        return *this;
+    }
+    RegisterFunctionHelper& setParameterDescription(const std::map<std::string_view, std::string>& parameters) {
+        mParameters = parameters;
+        return *this;
+    }
+    RegisterFunctionHelper& setDescription(std::string_view description) {
+        mDescription = description;
+        return *this;
+    }
+    template <typename FunctionT>
+
+    void operator=(FunctionT&& func) {
+        if constexpr (requires (FunctionT&& func){
+            mServer.registerToolFunction(mMethodName, std::function(std::forward<FunctionT>(func)), mDescription, mParameters);
+        }) {
+            mServer.registerToolFunction(mMethodName, std::function(std::forward<FunctionT>(func)), mDescription, mParameters);
+        } else {
+            mServer.registerToolFunction(mMethodName, std::forward<FunctionT>(func), mDescription, mParameters);
+        }
+    }
+
+private:
+    McpServerT& mServer;
+    std::string mMethodName;
+    std::string mDescription;
+    std::map<std::string_view, std::string> mParameters;
+};
 } // namespace detail
 
 template <>
@@ -32,13 +68,13 @@ protected:
     using IoContext  = ILIAS_NAMESPACE::IoContext;
     using IliasError = ILIAS_NAMESPACE::IoError;
     template <typename T>
-    using TaskGroup  = ILIAS_NAMESPACE::TaskGroup<T>;
+    using TaskGroup = ILIAS_NAMESPACE::TaskGroup<T>;
     template <typename T>
     using Unexpected = ILIAS_NAMESPACE::Unexpected<T>;
     template <typename T>
     using JsonRpcServer = NEKO_NAMESPACE::JsonRpcServer<T>;
     template <typename T>
-    using Result        = ILIAS_NAMESPACE::IoResult<T>;
+    using Result = ILIAS_NAMESPACE::IoResult<T>;
     template <typename T>
     using Reflect            = NEKO_NAMESPACE::Reflect<T>;
     using JsonSerializer     = NEKO_NAMESPACE::JsonSerializer;
@@ -72,10 +108,12 @@ public:
     auto wait() -> Task<void> { co_await mServer.wait(); }
     template <typename Ret, typename... Args>
     auto registerToolFunction(std::string_view name, std::function<Ret(Args...)> func,
-                              std::string_view description = "") -> bool;
+                              std::string_view description                                     = "",
+                              const std::map<std::string_view, std::string>& paramsDescription = {}) -> bool;
     template <typename Ret, typename... Args>
     auto registerToolFunction(std::string_view name, std::function<IoTask<Ret>(Args...)> func,
-                              std::string_view description = "") -> bool;
+                              std::string_view description                                     = "",
+                              const std::map<std::string_view, std::string>& paramsDescription = {}) -> bool;
     auto jsonRpcServer() -> JsonRpcServer<detail::McpJsonRpcMethods>& { return mServer; };
     auto registerLocalFileResource(std::string_view name, std::filesystem::path path, std::string_view uri = "",
                                    std::string_view description = "") -> bool;
@@ -104,6 +142,8 @@ public:
     auto* operator->() { return &mToolFunctions; }
     const auto* operator->() const { return &mToolFunctions; }
     auto toolsList(const PaginatedRequest&) -> ToolsListResult override;
+    auto registerToolFunction(std::string_view name) -> detail::RegisterFunctionHelper<McpServer>;
+    using McpServer<void>::registerToolFunction;
 
 private:
     void _register_tool_functions();
@@ -300,6 +340,11 @@ auto McpServer<ToolFunctions>::toolsList(const PaginatedRequest& params) -> Tool
     }
 }
 
+template <typename ToolFunctions>
+auto McpServer<ToolFunctions>::registerToolFunction(std::string_view name) -> detail::RegisterFunctionHelper<McpServer> {
+    return detail::RegisterFunctionHelper<McpServer>(*this, name);
+}
+
 inline auto McpServer<void>::_tools_list(PaginatedRequest params) noexcept -> IoTask<ToolsListResult> {
     co_return toolsList(params);
 }
@@ -380,14 +425,16 @@ inline auto McpServer<void>::registerResource(Resource resource,
 
 template <typename Ret, typename... Args>
 auto McpServer<void>::registerToolFunction(std::string_view name, std::function<Ret(Args...)> func,
-                                           std::string_view description) -> bool {
+                                           std::string_view description,
+                                           const std::map<std::string_view, std::string>& paramsDescription) -> bool {
     if (mHandlers.find(name) != mHandlers.end()) {
         return false;
     }
     using MethodT = DynamicToolFunction<std::function<Ret(Args...)>>;
     MethodT rpcMethodMetadata(name, description);
-    rpcMethodMetadata = func;
-    auto wrapper      = std::make_unique<detail::RpcMethodWrapperImpl<std::unique_ptr<MethodT>, void>>(
+    rpcMethodMetadata                   = func;
+    rpcMethodMetadata.paramsDescription = paramsDescription;
+    auto wrapper = std::make_unique<detail::RpcMethodWrapperImpl<std::unique_ptr<MethodT>, void>>(
         std::make_unique<MethodT>(std::move(rpcMethodMetadata)), this);
     mTools.push_back(std::function([method = wrapper->method.get()]() { return method->tool(); }));
     mHandlers[name] = std::move(wrapper);
@@ -396,14 +443,16 @@ auto McpServer<void>::registerToolFunction(std::string_view name, std::function<
 
 template <typename Ret, typename... Args>
 auto McpServer<void>::registerToolFunction(std::string_view name, std::function<IoTask<Ret>(Args...)> func,
-                                           std::string_view description) -> bool {
+                                           std::string_view description,
+                                           const std::map<std::string_view, std::string>& paramsDescription) -> bool {
     if (mHandlers.find(name) != mHandlers.end()) {
         return false;
     }
     using MethodT = DynamicToolFunction<std::function<Ret(Args...)>>;
     MethodT rpcMethodMetadata(name, description);
-    rpcMethodMetadata = func;
-    auto wrapper      = std::make_unique<detail::RpcMethodWrapperImpl<std::unique_ptr<MethodT>, void>>(
+    rpcMethodMetadata                   = func;
+    rpcMethodMetadata.paramsDescription = paramsDescription;
+    auto wrapper = std::make_unique<detail::RpcMethodWrapperImpl<std::unique_ptr<MethodT>, void>>(
         std::make_unique<MethodT>(std::move(rpcMethodMetadata)), this);
     mTools.push_back(std::function([method = &wrapper->method.get()]() { return method->tool(); }));
     mHandlers[name] = std::move(wrapper);

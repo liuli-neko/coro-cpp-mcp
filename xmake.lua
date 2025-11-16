@@ -1,6 +1,6 @@
 -- 工程设置
 set_project("coro-cpp-mcp")
-set_version("0.0.1", {build = "$(buildversion)"})
+set_version("0.1.0", {build = "$(buildversion)"})
 
 set_configvar("LEGAL_COPYRIGHT", "Copyright (C) 2024 liuli-neko(https://github.com/liuli-neko)")
 set_configvar("PROJECT_NAME", "coro-cpp-mcp")
@@ -69,6 +69,7 @@ target("coro-cpp-mcp")
     set_kind("headeronly")
 
     add_options("custom_namespace")
+    add_includedirs("$(projectdir)/include")
     set_pcxxheader("include/ccmcp/global/global.hpp")
     add_headerfiles("include/(ccmcp/**.hpp)")
     set_configvar("CCMCP_NAMESPACE", "$(custom_namespace)")

@@ -8,7 +8,10 @@ CCMCP_BN
 NEKO_USE_NAMESPACE
 namespace traits {
 template <typename CallableT>
-struct ToolFunctionTraits;
+struct ToolFunctionTraits {
+    static_assert(std::is_function_v<CallableT>, "ToolFunction parameters or return values ​​must be serializable, and parameters must be structures.");
+    static_assert(!std::is_function_v<CallableT>, "ToolFunction must be a function");
+};
 template <typename Ret, typename SerializableT>
     requires NEKO_NAMESPACE::detail::has_values_meta<SerializableT> &&
              NEKO_NAMESPACE::detail::has_names_meta<SerializableT>
