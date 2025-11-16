@@ -43,14 +43,14 @@ add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 -- headonly
 add_requires("fmt", {version = "11.0.x", configs = {shared = is_config("3rd_kind", "shared"), header_only = true}})
 -- normal libraries
-add_requires("ilias", {version = "dev", configs = {shared = is_config("3rd_kind", "shared"), cpp20 = true}})
-add_requires("neko-proto-tools", {version = "dev", configs = {shared = is_config("3rd_kind", "shared"), enable_rapidxml = false, enable_simdjson = false, enable_protocol = false, enable_rapidjson = true, enable_fmt = true, enable_communication = false}})
+add_requires("ilias", {version = "0.3.2", configs = {shared = is_config("3rd_kind", "shared"), cpp20 = true}})
+add_requires("neko-proto-tools", {version = "0.2.5", configs = {shared = is_config("3rd_kind", "shared"), enable_rapidxml = false, enable_simdjson = false, enable_protocol = false, enable_rapidjson = true, enable_fmt = true, enable_communication = false}})
 
 
 -- normal libraries' dependencies configurations
-add_requireconfs("**.ilias", {override = true, version = "dev", configs = {shared = is_config("3rd_kind", "shared"), cpp20 = true}})
+add_requireconfs("**.ilias", {override = true, version = "0.3.2", configs = {shared = is_config("3rd_kind", "shared"), cpp20 = true}})
 add_requireconfs("**.fmt", {override = true, version = "11.0.x", configs = {shared = is_config("3rd_kind", "shared"), header_only = true}})
-add_requireconfs("**.neko-proto-tools", {override = true, version = "dev", configs = {shared = is_config("3rd_kind", "shared"), enable_rapidxml = false, enable_simdjson = false, enable_protocol = false, enable_rapidjson = true, enable_fmt = true, enable_communication = false}})
+add_requireconfs("**.neko-proto-tools", {override = true, version = "0.2.5", configs = {shared = is_config("3rd_kind", "shared"), enable_rapidxml = false, enable_simdjson = false, enable_protocol = false, enable_rapidjson = true, enable_fmt = true, enable_communication = false}})
 add_requireconfs("**.rapidjson", {override = true, configs = {header_only = true}})
 
 if is_mode("debug") then
