@@ -87,7 +87,8 @@ struct SseEvent {
 };
 
 struct Sse {
-    Generator<SseEvent> stream;
+    Generator<SseEvent> stream; 
+    // TODO keep alive
 };
 
 struct Request {
@@ -98,53 +99,9 @@ struct Request {
 };
 
 template <typename T>
-concept IntoResponse = requires(T t) {
+concept ToResponse = requires(T t) {
     { toResponse(t) } ->  std::convertible_to<Response>;
 };
-
-class Router {
-public:
-    template <typename Callable> 
-        // requires (IntoResponse<std::invoke_result_t<Callable> >) // The callable must return a a type that can be converted to a response
-    auto route(std::string_view path, Get<Callable> cb) && -> Router {
-        addRouteImpl("GET", path, std::move(cb.fn));
-        return std::move(*this);
-    }
-
-    template <typename Callable>
-    auto route(std::string_view path, Post<Callable> cb) && -> Router {
-        addRouteImpl("POST", path, std::move(cb.fn));
-        return std::move(*this);
-    }
-private:
-    template <typename Callable>
-    auto addRouteImpl(std::string_view method, std::string_view path, Callable callable) -> void {
-        mRoutes[std::string(path)] = {method, [fn = std::move(callable)](auto req) -> Task<Response> {
-            if constexpr (std::is_invocable_v<Callable, Request>) { // We can invoke the callable with a request
-                co_return toResponse(co_await fn(std::move(req)));
-            }
-            // else if constexpr (std::is_invocable_v<Callable, HeadersMap>) { // The callable doesn't care about the request
-            //     co_return toResponse(co_await fn(std::move(req.headers)));
-            // }
-            else if constexpr (std::is_invocable_v<Callable, Buffer>) { // The callable doesn't care about the request or headers
-                co_return toResponse(co_await fn(std::move(req.body)));
-            }
-            else { // The callable doesn't care it
-                co_return toResponse(co_await fn());
-            }
-        }};
-    }
-
-    std::map<
-        std::string, 
-        std::pair<std::string_view, std::function<Task<Response> (Request request)> >, // METHOD, CALLBACK
-        detail::CaseCompare
-    > mRoutes;
-
-template <StreamClient T>
-friend auto serveStream(T _stream, Router &rt) -> Task<void>;
-};
-
 
 // Helpers generator
 inline auto makeGenerator(std::string_view str) -> Generator<Buffer> {
@@ -168,7 +125,7 @@ inline auto makeGenerator(std::vector<std::byte> bytes) -> Generator<Buffer> {
 }
 
 inline auto makeSseGenerator(Generator<SseEvent> gen) -> Generator<Buffer> {
-    ilias_foreach(auto e, gen) {
+    ilias_for_await(auto e, gen) {
         // Write the event
         if (!e.comment.empty()) {
             auto comment = ": " + std::string(e.comment) + "\n";
@@ -192,7 +149,7 @@ inline auto makeSseGenerator(Generator<SseEvent> gen) -> Generator<Buffer> {
 
 // Casting...
 inline auto toResponse(Response r) -> Response {
-    return r;
+    return std::move(r);
 }
 
 template <typename T>
@@ -222,6 +179,15 @@ inline auto toResponse(Json<T> j) -> Response {
     };
 }
 
+template <typename T>
+inline auto toResponse(Blob<T> b) -> Response {
+    return {
+        .code = 200,
+        .headers = { {"Content-Type", "application/octet-stream"} },
+        .content = makeGenerator(std::move(b.blob))
+    };
+}
+
 inline auto toResponse(Sse sse) -> Response {
     return {
         .code = 200,
@@ -230,6 +196,38 @@ inline auto toResponse(Sse sse) -> Response {
     };
 }
 
+// Helpers for some common responses type
+inline auto toResponse(std::string_view text) -> Response {
+    return toResponse(Text {text});
+}
+
+inline auto toResponse(const char *text) -> Response {
+    return toResponse(Text {text});
+}
+
+inline auto toResponse(std::string text) -> Response {
+    return toResponse(Text {std::move(text)});
+}
+
+inline auto toResponse(std::vector<std::byte> blob) -> Response {
+    return toResponse(Blob {std::move(blob)});
+}
+
+inline auto toResponse(Buffer buffer) -> Response {
+    return toResponse(Blob {std::move(buffer)});
+}
+
+// Helpers for composite responses with extra headers
+template <typename T>
+inline auto toResponse(std::pair<HeadersMap, T> pair) -> Response {
+    auto [headers, content] = std::move(pair);
+    auto response = toResponse(std::move(content));
+    // Merge headers
+    for (auto &[key, value] : headers) {
+        response.headers[key] = value;
+    }
+    return response;
+}
 
 template <typename T>
 inline auto get(T fn) -> Get<T> {
@@ -240,6 +238,52 @@ template <typename T>
 inline auto post(T fn) -> Post<T> {
     return {std::move(fn)};
 }
+
+class Router {
+public:
+    template <typename Callable> 
+        // requires (IntoResponse<std::invoke_result_t<Callable> >) // The callable must return a a type that can be converted to a response
+    auto route(std::string_view path, Get<Callable> cb) && -> Router {
+        addRouteImpl("GET", path, std::move(cb.fn));
+        return std::move(*this);
+    }
+
+    template <typename Callable>
+    auto route(std::string_view path, Post<Callable> cb) && -> Router {
+        addRouteImpl("POST", path, std::move(cb.fn));
+        return std::move(*this);
+    }
+private:
+    template <typename Callable>
+    auto addRouteImpl(std::string_view method, std::string_view path, Callable callable) -> void {
+        mRoutes[std::string(path)][method] = [fn = std::move(callable)](auto req) -> Task<Response> {
+            if constexpr (std::is_invocable_v<Callable, Request>) { // We can invoke the callable with a request
+                co_return toResponse(co_await fn(std::move(req)));
+            }
+            else if constexpr (std::is_invocable_v<Callable, HeadersMap>) { // The callable only cares about the headers
+                co_return toResponse(co_await fn(std::move(req.headers)));
+            }
+            else if constexpr (std::is_invocable_v<Callable, Buffer>) { // The callable care about the body
+                co_return toResponse(co_await fn(std::move(req.body)));
+            }
+            else if constexpr (std::is_invocable_v<Callable>) { // The callable doesn't care about any input
+                co_return toResponse(co_await fn());
+            }
+            else {
+                static_assert(std::is_same_v<Callable, void>, "Callable must be invocable with a Request, HeadersMap, Buffer or nothing");
+            }
+        };
+    }
+
+    std::map<
+        std::string, 
+        std::map<std::string_view, std::function<Task<Response> (Request request)> >, // Map The method to the callable
+        detail::CaseCompare
+    > mRoutes;
+
+template <StreamClient T>
+friend auto serveStream(T _stream, Router &rt) -> Task<void>;
+};
 
 template <StreamClient T>
 auto serveStream(T _stream, Router &rt) -> Task<void> 
@@ -306,7 +350,12 @@ try {
         // Get the content if there is any
         std::vector<std::byte> content;
         if (headers.contains("Content-Length")) {
-            auto len = std::stoi(headers["Content-Length"]);
+            size_t len = 0;
+            auto str = std::string_view(headers["Content-Length"]);
+            auto [_, err] = std::from_chars(str.data(), str.data() + str.size(), len);
+            if (err != std::errc()) {
+                co_return;
+            }
             content.resize(len);
             if (!co_await stream.readAll(content)) {
                 co_return;
@@ -323,15 +372,16 @@ try {
                     .content = makeGenerator(std::string_view("URL Not Found"))
                 };
             }
-            auto &[_, item] = *it;
-            auto &[accept_method, fn] = item;
-            if (accept_method != method) {
+            auto &[_, methods] = *it;
+            auto methodIt = methods.find(method);
+            if (methodIt == methods.end()) {
                 co_return Response {
                     .code = 405,
                     .headers = {}, // DEFAULT
                     .content = makeGenerator(std::string_view("Method Not Allowed"))
                 };
             }
+            auto &fn = methodIt->second;
             co_return co_await fn(Request {
                 .method = method,
                 .path = path,
@@ -361,7 +411,7 @@ try {
             co_return;
         }
 
-        ilias_foreach(Buffer chunk, response.content) {
+        ilias_for_await(Buffer chunk, response.content) {
             // size\r\n data\r\n
             char sizebuf[32];
             auto [ptr, ec] = std::to_chars(sizebuf, sizebuf + sizeof(sizebuf), chunk.size(), 16);
@@ -398,15 +448,16 @@ catch (...) {
 
 template <typename T>
 auto serve(T listener, Router rt) -> IoTask<void> {
-    auto scope = co_await TaskScope::make();
-    while (true) {
-        auto req = co_await listener.accept();
-        if (!req) {
-            co_return unexpected(req.error());
+    co_return co_await TaskScope::enter([&](TaskScope &scope) -> IoTask<void> {
+        while (true) {
+            auto req = co_await listener.accept();
+            if (!req) {
+                co_return Err(req.error());
+            }
+            auto &[stream, addr] = *req;
+            scope.spawn(serveStream(std::move(stream), rt));
         }
-        auto &[stream, addr] = *req;
-        scope.spawn(serveStream(std::move(stream), rt));
-    }
+    });
 }
 
 

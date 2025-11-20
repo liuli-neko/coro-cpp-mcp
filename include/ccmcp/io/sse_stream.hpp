@@ -2,197 +2,149 @@
 
 #include "../global/global.hpp"
 
-#include <ilias/http.hpp>
+#include <ilias/io/stream.hpp>
+#include <ilias/task/task.hpp>
+#include <ilias/sync/mpsc.hpp>
 #include <nekoproto/global/log.hpp>
 #include <nekoproto/jsonrpc/message_stream_wrapper.hpp>
+#include "./detail/minihttp.hpp"
 
 NEKO_BEGIN_NAMESPACE
-struct SseClient {};
-struct SseServer {};
 
-static constexpr int SSE_DEFAULT_PORT                = 8080;
-static constexpr std::string_view SSE_DEFAULT_HOST   = "localhost";
-static constexpr std::string_view SSE_DEFAULT_SCHEME = "http";
-
-template <>
-class MessageStream<SseClient, void> : public IMessageStream, public IMessageStreamClient {
-    using HttpSession = ILIAS_NAMESPACE::HttpSession;
-    using Url         = ILIAS_NAMESPACE::Url;
-    using IliasError  = ILIAS_NAMESPACE::Error;
-    template <typename T>
-    using Unexpected = ILIAS_NAMESPACE::Unexpected<T>;
-    using Event      = ILIAS_NAMESPACE::Event;
-    template <typename T>
-    using IoTask = ILIAS_NAMESPACE::IoTask<T>;
-    template <typename T>
-    using Task        = ILIAS_NAMESPACE::Task<T>;
-    using HttpRequest = ILIAS_NAMESPACE::HttpRequest;
-    using HttpReply   = ILIAS_NAMESPACE::HttpReply;
-
+class SseServerStream {
 public:
-    MessageStream() = default;
-    MessageStream(HttpSession&& mClient) : mClient(std::make_unique<HttpSession>(std::move(mClient))) {}
+    SseServerStream(SseServerStream &&) = default;
+    ~SseServerStream() = default;
 
-    auto recv() -> IoTask<std::span<std::byte>> override {
-        if (mIsCancel) {
-            co_return Unexpected(IliasError::Canceled);
+    auto recv(std::vector<std::byte> &buffer) -> ilias::IoTask<void> {
+        auto in = co_await mInput.recv();
+        if (!in) { // EOF
+            co_return ilias::Err(ilias::IoError::Canceled);
         }
-        while (mBuffer.empty()) {
-            mEvent.set();
-            if (auto ret = co_await mEvent; !ret) {
-                co_return Unexpected(ret.error());
-            }
-        }
-        co_return mBuffer;
-    }
-
-    auto send(std::span<const std::byte> data) -> IoTask<void> override {
-        if (mIsCancel) {
-            co_return Unexpected(IliasError::Canceled);
-        }
-        HttpRequest req;
-        req.setUrl(mUrl);
-        req.setHeader("Content-Type", "text/mEvent-stream");
-        req.setHeader("Cache-Control", "no-cache");
-        req.setHeader("Connection", "keep-alive");
-
-        auto ret = co_await (mClient->post(req, data) | ILIAS_NAMESPACE::ignoreCancellation);
-        if (!ret) {
-            co_return Unexpected(ret.error_or(IliasError::Unknown));
-        }
-        co_await reply(ret.value());
-
+        auto ptr = reinterpret_cast<const std::byte *>(in->data());
+        buffer.assign(ptr, ptr + in->size());
         co_return {};
     }
 
-    auto close() -> void override {
-        mClient.reset();
-        mIsCancel = false;
-    }
-
-    auto cancel() -> void override { mIsCancel = true; }
-
-    // url like : sse://127.0.0.1:8080
-    auto checkProtocol([[maybe_unused]] Type type, std::string_view url) -> bool override {
-        return !(url.substr(0, 6) != "sse://") && type == Type::Client;
-    }
-
-    auto start(std::string_view url) -> IoTask<void> override {
-        mIsCancel = false;
-        mClient   = std::make_unique<HttpSession>(co_await HttpSession::make());
-        mUrl      = Url(mScheme + "://" + std::string(url.substr(6)));
-        if (!mUrl.isValid()) {
-            co_return Unexpected(IliasError::InvalidArgument);
+    auto send(std::span<const std::byte> data) -> ilias::IoTask<void> {
+        auto output = std::string(reinterpret_cast<const char *>(data.data()), data.size());
+        if (!co_await mOutput.send(std::move(output))) {
+            co_return ilias::Err(ilias::IoError::Canceled);
         }
         co_return {};
     }
 
-    auto isConnected() -> bool override { return mClient != nullptr; }
-
-private:
-    Task<void> reply(HttpReply& reply) {
-        if (reply.statusCode() == 200) {
-            if (auto ret = co_await reply.content(); ret) {
-                mBuffer = std::move(*ret);
-                mEvent.set();
-            }
-        } else {
-            NEKO_LOG_INFO("sse", "got unexpected status code: {} - {}", reply.statusCode(), reply.status());
-        }
+    auto close() -> void {
+        mOutput.close();
+        mInput.close();
     }
 
+    auto cancel() -> void {
+
+    }
+
+    auto start() -> ilias::IoTask<void> {
+        co_return {};
+    }
+
+    auto operator =(SseServerStream &&) -> SseServerStream & = default;
 private:
-    std::unique_ptr<HttpSession> mClient;
-    Event mEvent;
-    std::vector<std::byte> mBuffer;
-    std::string mScheme = std::string(SSE_DEFAULT_SCHEME);
-    Url mUrl;
-    bool mIsCancel = false;
+    SseServerStream() = default;
+
+    ilias::mpsc::Sender<std::string>   mOutput;
+    ilias::mpsc::Receiver<std::string> mInput;
+friend class SseListener;
 };
 
-template <>
-class MessageStream<SseServer, void> : public IMessageStream, public IMessageStreamServer {
-    using IliasError = ILIAS_NAMESPACE::Error;
-    template <typename T>
-    using Unexpected = ILIAS_NAMESPACE::Unexpected<T>;
-    using Event      = ILIAS_NAMESPACE::Event;
-    template <typename T>
-    using IoTask       = ILIAS_NAMESPACE::IoTask<T>;
-    using HttpSession  = ILIAS_NAMESPACE::HttpSession;
-    using TcpListener  = ILIAS_NAMESPACE::TcpListener;
-    using TcpClient    = ILIAS_NAMESPACE::TcpClient;
-    using IPEndpoint   = ILIAS_NAMESPACE::IPEndpoint;
-    using Url          = ILIAS_NAMESPACE::Url;
-    using Reply        = ILIAS_NAMESPACE::HttpReply;
-    using Request      = ILIAS_NAMESPACE::HttpRequest;
-    using ReuseAddress = ILIAS_NAMESPACE::sockopt::ReuseAddress;
-
+class SseListener {
 public:
-    auto close() -> void override {
-        if (listener) {
-            listener.close();
-        }
-        mClient.reset();
-        mIsCancel = false;
+    SseListener(ilias::TcpListener listener) : mListener(std::move(listener)) {
+
     }
 
-    auto cancel() -> void override {
-        if (listener) {
-            listener.cancel();
-        }
-        mIsCancel = true;
-    }
+    // auto start() -> ilias::IoTask<void> {
+    //     if (!mListener) {
+    //         co_return ilias::Err(JsonRpcError::ClientNotInit);
+    //     }
+    //     mHandle = ilias::spawn(loop());
+    //     co_return {};
+    // }
 
-    auto isListening() -> bool override { return (bool)listener; }
-
-    auto checkProtocol(Type type, std::string_view url) -> bool override {
-        return !(url.substr(0, 6) != "sse://") && type == Type::Server;
-    }
-
-    auto start(std::string_view url) -> IoTask<void> override {
-        mIsCancel       = false;
-        auto ipendpoint = IPEndpoint::fromString(url.substr(6));
-        if (!ipendpoint) {
-            co_return Unexpected(IliasError::InvalidArgument);
-        }
-        if (auto ret = co_await TcpListener::make(ipendpoint->family()); ret) {
-            ret.value().setOption(ReuseAddress(1));
-            if (auto ret1 = ret.value().bind(ipendpoint.value()); ret1) {
-                listener = std::move(ret.value());
-                co_return {};
-            } else {
-                co_return Unexpected(ret1.error());
-            }
-        } else {
-            co_return Unexpected(ret.error());
+    auto close() -> void {
+        if (mHandle) {
+            mHandle.stop();
+            mHandle.wait();
+            mHandle = nullptr;
         }
     }
 
-    auto accept() -> IoTask<std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>> override {
-        if (!listener) {
-            co_return Unexpected(JsonRpcError::ClientNotInit);
-        }
-        if (mIsCancel) {
-            co_return Unexpected(IliasError::Canceled);
-        }
-        if (auto ret = co_await listener.accept(); ret) {
-            mClient = std::make_unique<HttpSession>(std::move(ret.value().first));
-
-            co_return std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>(
-                new DatagramClient<TcpClient>(std::move(ret.value().first)),
-                +[](IMessageStreamClient* ptr) { delete ptr; });
-        } else {
-            co_return Unexpected(ret.error());
-        }
+    auto cancel() -> void {
+        
     }
 
+    auto accept() -> ilias::IoTask<SseServerStream> {
+        if (!mHandle) {
+            auto [sender, receiver] = ilias::mpsc::channel<SseServerStream>();
+            mSender = std::move(sender);
+            mReceiver = std::move(receiver);
+            mHandle = ilias::spawn(loop());
+        }
+        auto res = co_await mReceiver.recv();
+        if (!res) {
+            co_return ilias::Err(ilias::IoError::Canceled);
+        }
+        co_return std::move(*res);
+    }
 private:
-    TcpListener listener;
-    std::unique_ptr<HttpSession> mClient;
-    Event mEvent;
-    std::vector<std::byte> mBuffer;
-    std::string mSchema = std::string(SSE_DEFAULT_SCHEME);
-    bool mIsCancel      = false;
+    auto loop() -> ilias::Task<void> {
+        auto router = minihttp::Router()
+            .route("/sse", minihttp::get([this]() -> ilias::Task<minihttp::Sse> {
+                return processIncoming();
+            }))
+            .route("/message", minihttp::post([this](minihttp::Request request) -> ilias::Task<minihttp::Text<std::string> > {
+                return processPost(std::move(request));
+            }))
+        ;
+        co_await minihttp::serve(std::move(mListener), router);
+    }
+
+    auto processIncoming() -> ilias::Task<minihttp::Sse> {
+        auto [inSender, inReceiver] = ilias::mpsc::channel<std::string>();
+        auto [outSender, outReceiver] = ilias::mpsc::channel<std::string>();
+        auto stream = SseServerStream {};
+        stream.mInput = std::move(inReceiver);
+        stream.mOutput = std::move(outSender);
+        co_await mSender.send(std::move(stream));
+        
+
+        mId += 1;
+        mSessions.insert({std::to_string(mId), std::move(inSender)});
+        co_return minihttp::Sse(sseGenerator(std::move(outReceiver), mId));
+    }
+
+    auto processPost(minihttp::Request request) -> ilias::Task<minihttp::Text<std::string> > {
+        co_return {};
+    }
+
+    auto sseGenerator(ilias::mpsc::Receiver<std::string> input, size_t id) -> ilias::Generator<minihttp::SseEvent> {
+        co_yield minihttp::SseEvent { .event = "endpoint", .data = "/message?id=" + std::to_string(id)};
+        while (true) {
+            auto text = co_await input.recv();
+            if (!text) {
+                co_return;
+            }
+            co_yield minihttp::SseEvent { .event = "message", .data = *text};
+        }
+    }
+
+    ilias::TcpListener      mListener;
+    ilias::WaitHandle<void> mHandle;
+    ilias::mpsc::Sender<SseServerStream> mSender;
+    ilias::mpsc::Receiver<SseServerStream> mReceiver;
+
+    // TODO: use isolated endpoint to receive the client post
+    std::map<std::string, ilias::mpsc::Sender<std::string> > mSessions; // endpoint -> sender
+    size_t mId = 0;
 };
 
 NEKO_END_NAMESPACE

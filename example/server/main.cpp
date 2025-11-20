@@ -2,6 +2,7 @@
 #include <nekoproto/serialization/to_string.hpp>
 
 #include "ccmcp/io/stdio_stream.hpp"
+#include "ccmcp/io/sse_stream.hpp"
 #include "ccmcp/model/model.hpp"
 #include "ccmcp/server/server.hpp"
 
@@ -83,9 +84,18 @@ int ilias_main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     };
 
     // TODO: add server code here
+#if 0
     StdioStream stdio;
     co_await stdio.start();
     server.addTransport(std::move(stdio));
+#else
+    auto listener = co_await ILIAS_NAMESPACE::TcpListener::bind("127.0.0.1:8848");
+    if (!listener) {
+        co_return -1;
+    }
+    SseListener sse(std::move(*listener));
+    server.setListener<SseListener>(std::move(sse));
+#endif
     co_await server.wait();
 
     co_return 0;

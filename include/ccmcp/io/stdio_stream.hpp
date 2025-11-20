@@ -21,6 +21,8 @@ class StdioStream {
     using IliasError = ILIAS_NAMESPACE::IoError;
     template <typename T>
     using BufReader = ILIAS_NAMESPACE::BufReader<T>;
+    template <typename T>
+    using BufWriter = ILIAS_NAMESPACE::BufWriter<T>;
 
 public:
     StdioStream() {}
@@ -46,21 +48,29 @@ public:
     }
 
     auto send(std::span<const std::byte> data) -> IoTask<void> {
-        // TODO: USE BETTER WAY
-        ::fwrite(reinterpret_cast<const char*>(data.data()), 1, data.size(), stdout);
-        ::fputc('\n', stdout);
-        ::fflush(stdout);
-        co_return {};
+        if (data.empty()) {
+            co_return {};
+        }
+        if (!mOut) {
+            co_return Unexpected(JsonRpcError::ClientNotInit);
+        }
+        if (auto ret = co_await (mOut.writeAll(data) | ILIAS_NAMESPACE::unstoppable()); !ret) {
+            co_return Unexpected(ret.error());
+        }
+        std::byte end [1] = {std::byte{'\n'}};
+        if (auto ret = co_await (mOut.writeAll(end) | ILIAS_NAMESPACE::unstoppable()); !ret) {
+            co_return Unexpected(ret.error());
+        }
+        co_return co_await mOut.flush();
     }
 
     auto close() -> void {
         if (mIn) {
-            // FIXME: Ilias has a bug in BufReader
-            auto console = std::move(mIn).detach();
+            auto console = std::exchange(mIn, {}).detach();
             console.close();
         }
         if (mOut) {
-            auto console = std::move(mOut).detach();
+            auto console = std::exchange(mOut, {}).detach();
             console.close();
         }
     }
@@ -82,18 +92,17 @@ public:
         } else {
             co_return Unexpected(ret.error());
         }
-        // ilias console out has bug in this version in mcp-server
-        // if (auto ret = co_await Console::fromStdout(); ret) {
-        //     mOut = std::move(ret.value());
-        // } else {
-        //     co_return Unexpected(ret.error());
-        // }
+        if (auto ret = co_await Console::fromStdout(); ret) {
+            mOut = std::move(ret.value());
+        } else {
+            co_return Unexpected(ret.error());
+        }
         co_return {};
     }
 
 private:
     BufReader<Console> mIn;
-    BufReader<Console> mOut;
+    BufWriter<Console> mOut;
     std::string mJson;
 };
 
