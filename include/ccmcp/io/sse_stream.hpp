@@ -7,7 +7,7 @@
 #include <ilias/sync/mpsc.hpp>
 #include <nekoproto/global/log.hpp>
 #include <nekoproto/jsonrpc/message_stream_wrapper.hpp>
-#include "./detail/minihttp.hpp"
+#include <minihttp/router.hpp>
 
 NEKO_BEGIN_NAMESPACE
 
@@ -62,14 +62,6 @@ public:
 
     }
 
-    // auto start() -> ilias::IoTask<void> {
-    //     if (!mListener) {
-    //         co_return ilias::Err(JsonRpcError::ClientNotInit);
-    //     }
-    //     mHandle = ilias::spawn(loop());
-    //     co_return {};
-    // }
-
     auto close() -> void {
         if (mHandle) {
             mHandle.stop();
@@ -96,44 +88,69 @@ public:
         co_return std::move(*res);
     }
 private:
+    using SseEvent = minihttp::server::SseEvent;
+    using SseGenerator = ilias::Generator<SseEvent>;
+    using Sse = minihttp::server::Sse;
+    using Query = minihttp::server::Query<minihttp::server::UrlParams>;
+    using Text = minihttp::server::Text<std::string>;
+    using Router = minihttp::server::Router;
+
     auto loop() -> ilias::Task<void> {
-        auto router = minihttp::Router()
-            .route("/sse", minihttp::get([this]() -> ilias::Task<minihttp::Sse> {
+        auto router = Router()
+            .get("/sse", [this]() {
                 return processIncoming();
-            }))
-            .route("/message", minihttp::post([this](minihttp::Request request) -> ilias::Task<minihttp::Text<std::string> > {
-                return processPost(std::move(request));
-            }))
+            })
+            .post("/message", [this](Query request, Text content) {
+                return processPost(std::move(request), std::move(content));
+            })
         ;
-        co_await minihttp::serve(std::move(mListener), router);
+        co_await minihttp::server::serve(std::move(mListener), std::move(router));
     }
 
-    auto processIncoming() -> ilias::Task<minihttp::Sse> {
+    auto processIncoming() -> ilias::Task<Sse> {
         auto [inSender, inReceiver] = ilias::mpsc::channel<std::string>();
         auto [outSender, outReceiver] = ilias::mpsc::channel<std::string>();
         auto stream = SseServerStream {};
         stream.mInput = std::move(inReceiver);
         stream.mOutput = std::move(outSender);
         co_await mSender.send(std::move(stream));
-        
 
+        // Register the session
         mId += 1;
         mSessions.insert({std::to_string(mId), std::move(inSender)});
-        co_return minihttp::Sse(sseGenerator(std::move(outReceiver), mId));
+        co_return Sse(sseGenerator(std::move(outReceiver), mId));
     }
 
-    auto processPost(minihttp::Request request) -> ilias::Task<minihttp::Text<std::string> > {
+    auto processPost(Query request, Text textContent) -> ilias::Task<Text> {
+        auto &[params] = request;
+        auto &[content] = textContent;
+        auto it = mSessions.find(params["id"]);
+        if (it == mSessions.end()) {
+            co_return Text("Invalid id");
+        }
+        auto &[_, sender] = *it;
+        co_await sender.send(std::move(content));
         co_return {};
     }
 
-    auto sseGenerator(ilias::mpsc::Receiver<std::string> input, size_t id) -> ilias::Generator<minihttp::SseEvent> {
-        co_yield minihttp::SseEvent { .event = "endpoint", .data = "/message?id=" + std::to_string(id)};
+    auto sseGenerator(ilias::mpsc::Receiver<std::string> input, size_t id) -> SseGenerator {
+        // FIXME: possible leak on here, need fix in minihttp
+        struct Guard {
+            ~Guard() {
+                self.mSessions.erase(std::to_string(id));
+            }
+
+            SseListener &self;
+            size_t id;
+        } guard {*this, id};
+
+        co_yield SseEvent { .event = "endpoint", .data = "/message?id=" + std::to_string(id)};
         while (true) {
             auto text = co_await input.recv();
             if (!text) {
                 co_return;
             }
-            co_yield minihttp::SseEvent { .event = "message", .data = *text};
+            co_yield SseEvent { .event = "message", .data = *text};
         }
     }
 
@@ -142,7 +159,6 @@ private:
     ilias::mpsc::Sender<SseServerStream> mSender;
     ilias::mpsc::Receiver<SseServerStream> mReceiver;
 
-    // TODO: use isolated endpoint to receive the client post
     std::map<std::string, ilias::mpsc::Sender<std::string> > mSessions; // endpoint -> sender
     size_t mId = 0;
 };
