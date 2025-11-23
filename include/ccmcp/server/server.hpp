@@ -52,8 +52,8 @@ public:
 
 private:
     McpServerT& mServer;
-    std::string mMethodName;
-    std::string mDescription;
+    std::string_view mMethodName;
+    std::string_view mDescription;
     std::map<std::string_view, std::string> mParameters;
 };
 } // namespace detail
@@ -377,7 +377,7 @@ inline auto McpServer<void>::_tools_call(ToolCallRequestParams params) noexcept 
             result.isError = true;
         }
     } else {
-        info.error = "Tool not found";
+        info.error = "Tool " + params.name + " not found";
     }
     info.executionTime =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - time).count();
