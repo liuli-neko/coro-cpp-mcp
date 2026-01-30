@@ -45,7 +45,7 @@ protected:
         RetT respon;
         if constexpr (NEKO_NAMESPACE::detail::has_values_meta<RetT>) {
             int idx = 0;
-            Reflect<RetT>::forEachWithoutName(respon, [&contents, &idx, &rc](auto& field) {
+            Reflect<RetT>::forEach(respon, [&contents, &idx, &rc](auto& field) {
                 if (auto val = rc(contents[idx++], std::decay_t<decltype(field)>{}); val) {
                     field = *val;
                 }
@@ -163,7 +163,7 @@ void McpClient<ToolFunctions>::_register_tool_functions() {
     if constexpr (std::is_empty_v<ToolFunctions> || std::is_void_v<ToolFunctions>) {
         static_assert(!std::is_empty_v<ToolFunctions>, "ToolFunctions must be a non-empty class or struct");
     } else {
-        Reflect<ToolFunctions>::forEachWithoutName(mToolFunctions, [this](auto& rpcMethodMetadata) {
+        Reflect<ToolFunctions>::forEach(mToolFunctions, [this](auto& rpcMethodMetadata) {
             using MethodT = std::decay_t<decltype(rpcMethodMetadata)>;
             if constexpr (std::is_void_v<typename MethodT::ParamsT>) {
                 rpcMethodMetadata = std::bind(&McpClient<ToolFunctions>::callRemote<typename MethodT::ReturnT>, this,

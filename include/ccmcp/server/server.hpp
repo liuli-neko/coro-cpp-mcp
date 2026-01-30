@@ -10,6 +10,7 @@ CCMCP_BN
 template <typename ToolFunctions>
 class McpServer;
 
+using ResourceContents = std::variant<TextResourceContents, BlobResourceContents>;
 namespace detail {
 struct RpcMethodWrapper {
     template <typename U>
@@ -41,10 +42,12 @@ public:
     template <typename FunctionT>
 
     void operator=(FunctionT&& func) {
-        if constexpr (requires (FunctionT&& func){
-            mServer.registerToolFunction(mMethodName, std::function(std::forward<FunctionT>(func)), mDescription, mParameters);
-        }) {
-            mServer.registerToolFunction(mMethodName, std::function(std::forward<FunctionT>(func)), mDescription, mParameters);
+        if constexpr (requires(FunctionT&& func) {
+                          mServer.registerToolFunction(mMethodName, std::function(std::forward<FunctionT>(func)),
+                                                       mDescription, mParameters);
+                      }) {
+            mServer.registerToolFunction(mMethodName, std::function(std::forward<FunctionT>(func)), mDescription,
+                                         mParameters);
         } else {
             mServer.registerToolFunction(mMethodName, std::forward<FunctionT>(func), mDescription, mParameters);
         }
@@ -56,6 +59,101 @@ private:
     std::string_view mDescription;
     std::map<std::string_view, std::string> mParameters;
 };
+
+// 辅助函数，用于将字符串转为小写，以便进行不区分大小写的比较
+inline std::string to_lower(std::string_view str) {
+    std::string lower_str(str);
+    std::transform(lower_str.begin(), lower_str.end(), lower_str.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    return lower_str;
+}
+
+// MIME类型映射表，你可以根据需要扩展
+const std::unordered_map<std::string, std::string> MimeTypeMap = {
+    // 文本类型
+    {".txt", "text/plain"},
+    {".md", "text/markdown"},
+    {".json", "application/json"},
+    {".xml", "application/xml"},
+    {".html", "text/html"},
+    {".css", "text/css"},
+    {".js", "application/javascript"},
+    {".py", "text/x-python"},
+    {".cpp", "text/x-c++"},
+    {".hpp", "text/x-c++"},
+    {".h", "text/x-c++"},
+    {".c", "text/x-c"},
+    {".java", "text/x-java-source"},
+    {".rs", "text/rust"},
+    {".toml", "application/toml"},
+    {".yaml", "application/yaml"},
+    {".yml", "application/yaml"},
+    // 二进制类型
+    {".png", "image/png"},
+    {".jpg", "image/jpeg"},
+    {".jpeg", "image/jpeg"},
+    {".gif", "image/gif"},
+    {".webp", "image/webp"},
+    {".pdf", "application/pdf"},
+    {".zip", "application/zip"},
+};
+
+// 核心函数：创建文件资源内容
+auto createResourceContentsFromFile(const std::filesystem::path& path, const std::string& uri) -> ResourceContents {
+    // 安全检查：设置一个最大文件大小限制（例如16MB），防止内存溢出
+    constexpr uintmax_t MAX_FILE_SIZE = 16 * 1024 * 1024;
+
+    try {
+        if (!std::filesystem::exists(path)) {
+            // 文件不存在，返回空的 TextResourceContents，并附带错误信息
+            // 协议本身不支持错误，所以我们返回一个"空"内容
+            NEKO_LOG_WARN("mcp server", "Resource file not found: {}", path.string());
+            return TextResourceContents{.uri = uri, .text = "Error: File not found.", .mimeType = "text/plain"};
+        }
+
+        const auto fileSize = std::filesystem::file_size(path);
+        if (fileSize > MAX_FILE_SIZE) {
+            NEKO_LOG_WARN("mcp server", "Resource file exceeds size limit ({} > {} bytes): {}", fileSize, MAX_FILE_SIZE,
+                          path.string());
+            return TextResourceContents{
+                .uri = uri, .text = "Error: File is too large to read.", .mimeType = "text/plain"};
+        }
+
+        const std::string extension = to_lower(path.extension().string());
+        auto it                     = MimeTypeMap.find(extension);
+        const std::string mimeType  = (it != MimeTypeMap.end()) ? it->second : "application/octet-stream";
+
+        // 判断是文本还是二进制
+        // 简单启发式：如果MIME类型以 "text/" 开头或是已知的文本格式
+        bool isText = (mimeType.rfind("text/", 0) == 0) || mimeType == "application/json" ||
+                      mimeType == "application/javascript" || mimeType == "application/xml";
+
+        if (isText) {
+            std::ifstream file(path);
+            if (!file.is_open()) {
+                return TextResourceContents{
+                    .uri = uri, .text = "Error: Could not open file.", .mimeType = "text/plain"};
+            }
+            std::string textContent((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            return TextResourceContents{.uri = uri, .text = std::move(textContent), .mimeType = mimeType};
+        } else {
+            // 作为二进制文件处理
+            std::ifstream file(path, std::ios::binary);
+            if (!file.is_open()) {
+                return TextResourceContents{
+                    .uri = uri, .text = "Error: Could not open file.", .mimeType = "text/plain"};
+            }
+            // 读取到vector<char>比直接到string更安全
+            std::vector<char> buffer(std::istreambuf_iterator<char>(file), {});
+            auto data = Base64Covert::Encode(buffer);
+            return BlobResourceContents{
+                .uri = uri, .blob = std::string(data.begin(), data.end()), .mimeType = mimeType};
+        }
+    } catch (const std::filesystem::filesystem_error& e) {
+        NEKO_LOG_ERROR("mcp server", "Filesystem error reading resource {}: {}", path.string(), e.what());
+        return TextResourceContents{.uri = uri, .text = "Error: Filesystem error.", .mimeType = "text/plain"};
+    }
+}
 } // namespace detail
 
 template <>
@@ -88,9 +186,6 @@ protected:
     auto _cancelled(CancelledNotificationParams) noexcept -> IoTask<void>;
 
 public:
-    using ResourceContentsT = std::variant<TextResourceContents, BlobResourceContents>;
-
-public:
     McpServer(IoContext& ctx);
     auto setCapabilities(const ExperimentalCapabilities& capabilities) noexcept -> void;
     auto setCapabilities(const LoggingCapability& capabilities) noexcept -> void;
@@ -117,8 +212,8 @@ public:
     auto jsonRpcServer() -> JsonRpcServer<detail::McpJsonRpcMethods>& { return mServer; };
     auto registerLocalFileResource(std::string_view name, std::filesystem::path path, std::string_view uri = "",
                                    std::string_view description = "") -> bool;
-    auto registerResource(Resource resource, ResourceContentsT) -> void;
-    auto registerResource(Resource resource, std::function<ResourceContentsT(std::optional<Meta> meta)>) -> void;
+    auto registerResource(Resource resource, ResourceContents) -> void;
+    auto registerResource(Resource resource, std::function<ResourceContents(std::optional<Meta> meta)>) -> void;
 
 protected:
     JsonRpcServer<detail::McpJsonRpcMethods> mServer;
@@ -129,7 +224,7 @@ protected:
     std::vector<std::function<Tool()>> mTools;
 
     // for resources
-    std::map<std::string, std::function<ResourceContentsT(std::optional<Meta> meta)>> mResources;
+    std::map<std::string, std::function<ResourceContents(std::optional<Meta> meta)>> mResources;
     std::vector<Resource> mResourceList;
     ServerCapabilities mCapabilities;
 };
@@ -185,7 +280,7 @@ inline void McpServer<void>::_register_rpc_methods() {
         return ListResourcesResult{.resources = mResourceList, .nextCursor = std::nullopt};
     }; // TODO: MUST IMPL 默认没有任何资源模板
     mServer->resourcesTemplatesList = [](EmptyRequestParams) -> ListResourceTemplatesResult {
-        return {};
+        return ListResourceTemplatesResult{.resourceTemplates = {}, .nextCursor = std::nullopt};
     }; // TODO: MUST IMPL
     mServer->resourcesRead = [this](ReadResourceRequestParams request) -> ReadResourceResult {
         ReadResourceResult result;
@@ -201,17 +296,25 @@ inline void McpServer<void>::_register_rpc_methods() {
     mServer->resourcesSubscribe   = [](SubscribeRequestParams) -> void {};
     mServer->resourcesUnsubscribe = [](UnsubscribeRequestParams) -> void {};
     mServer->resourcesUpdated     = [](ResourceUpdatedNotificationParams) -> void {};
-    mServer->promptsList          = [](EmptyRequestParams) -> void {};
-    mServer->promptsGet           = [](GetPromptRequestParams) -> GetPromptResult { return {}; };
-    mServer->promptsListChanged   = [](EmptyRequestParams) -> void {};
-    mServer->toolsListChanged     = [](EmptyRequestParams) -> void {};
-    mServer->loggingSetLevel      = [](SetLevelRequestParams) -> void {};
-    mServer->loggingMessage       = [](LoggingMessageNotificationParams) -> void {};
-    mServer->createMessage        = [](CreateMessageRequestParams) -> void {};
-    mServer->completionComplete   = [](CompleteRequestParams) -> CompleteResult { return {}; };
-    mServer->rootsList            = [](EmptyRequestParams) -> ListRootsResult { return {}; };
-    mServer->rootsListChanged     = [](EmptyRequestParams) -> void {};
-    mServer->cancelled            = std::function<IoTask<void>(CancelledNotificationParams)>(
+    mServer->promptsList          = [](EmptyRequestParams) -> ListPromptsResult {
+        return ListPromptsResult{.prompts = {}, .nextCursor = std::nullopt};
+    };
+    mServer->promptsGet = [](GetPromptRequestParams) -> GetPromptResult {
+        return GetPromptResult{.description = "default", .messages = {}, ._meta = std::nullopt};
+    };
+    mServer->promptsListChanged = [](EmptyRequestParams) -> void {};
+    mServer->toolsListChanged   = [](EmptyRequestParams) -> void {};
+    mServer->loggingSetLevel    = [](SetLevelRequestParams) -> void {};
+    mServer->loggingMessage     = [](LoggingMessageNotificationParams) -> void {};
+    mServer->createMessage      = [](CreateMessageRequestParams) -> void {};
+    mServer->completionComplete = [](CompleteRequestParams) -> CompleteResult {
+        return CompleteResult{.completion = {.values = {}, .total = 0, .hasMore = false}, ._meta = std::nullopt};
+    };
+    mServer->rootsList = [](EmptyRequestParams) -> ListRootsResult {
+        return ListRootsResult{.roots = {}, ._meta = std::nullopt};
+    };
+    mServer->rootsListChanged = [](EmptyRequestParams) -> void {};
+    mServer->cancelled        = std::function<IoTask<void>(CancelledNotificationParams)>(
         std::bind(&McpServer::_cancelled, this, std::placeholders::_1));
 }
 
@@ -263,8 +366,8 @@ struct RpcMethodWrapperImpl : public RpcMethodWrapper {
         }
         if (respon) {
             if constexpr (NEKO_NAMESPACE::detail::has_values_meta<RetT>) {
-                Reflect<RetT>::forEachWithoutName(
-                    respon.value(), [&result](auto& field) { result.content.push_back(make_content(field)); });
+                Reflect<RetT>::forEach(respon.value(),
+                                       [&result](auto& field) { result.content.push_back(make_content(field)); });
             }
             if constexpr (requires { std::begin(respon.value()); } && !(std::is_same_v<RetT, std::string>) &&
                           !(std::is_same_v<RetT, std::u8string>) && !(std::is_same_v<RetT, std::string_view>) &&
@@ -286,7 +389,7 @@ void McpServer<ToolFunctions>::_register_tool_functions() {
     if constexpr (std::is_empty_v<ToolFunctions> || std::is_void_v<ToolFunctions>) {
         static_assert(!std::is_empty_v<ToolFunctions>, "ToolFunctions must be a non-empty class or struct");
     } else {
-        Reflect<ToolFunctions>::forEachWithoutName(mToolFunctions, [this](auto& rpcMethodMetadata) {
+        Reflect<ToolFunctions>::forEach(mToolFunctions, [this](auto& rpcMethodMetadata) {
             using MethodT = std::decay_t<decltype(rpcMethodMetadata)>;
             mHandlers[rpcMethodMetadata.name] =
                 std::make_unique<detail::RpcMethodWrapperImpl<MethodT*, ToolFunctions>>(&rpcMethodMetadata, this);
@@ -334,14 +437,14 @@ auto McpServer<ToolFunctions>::toolsList(const PaginatedRequest& params) -> Tool
     if constexpr (std::is_empty_v<ToolFunctions> || std::is_void_v<ToolFunctions>) {
         return result;
     } else {
-        Reflect<ToolFunctions>::forEachWithoutName(mToolFunctions,
-                                                   [&](auto& tool) { result.tools.push_back(tool.tool()); });
+        Reflect<ToolFunctions>::forEach(mToolFunctions, [&](auto& tool) { result.tools.push_back(tool.tool()); });
         return result;
     }
 }
 
 template <typename ToolFunctions>
-auto McpServer<ToolFunctions>::registerToolFunction(std::string_view name) -> detail::RegisterFunctionHelper<McpServer> {
+auto McpServer<ToolFunctions>::registerToolFunction(std::string_view name)
+    -> detail::RegisterFunctionHelper<McpServer> {
     return detail::RegisterFunctionHelper<McpServer>(*this, name);
 }
 
@@ -398,27 +501,20 @@ inline auto McpServer<void>::registerLocalFileResource(std::string_view name, st
         resource.description = std::string(description);
     }
     resource.metadata = ResourceMetadata{.type = "file", .size = std::filesystem::file_size(path)};
-    registerResource(resource, [path = path, uri = resource.uri](std::optional<Meta>) -> ResourceContentsT {
-        auto file = std::ifstream(path, std::ios::binary);
-        BlobResourceContents contents;
-        contents.uri      = uri;
-        contents.mimeType = "application/octet-stream";
-        if (file.is_open()) {
-            auto data = Base64Covert::Encode({std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()});
-            contents.blob = std::string(data.begin(), data.end());
-        }
+    registerResource(resource, [path = path, uri = resource.uri](std::optional<Meta>) -> ResourceContents {
+        auto contents = detail::createResourceContentsFromFile(path, uri);
         return contents;
     });
     return true;
 }
 
-inline auto McpServer<void>::registerResource(Resource resource, ResourceContentsT contents) -> void {
+inline auto McpServer<void>::registerResource(Resource resource, ResourceContents contents) -> void {
     registerResource(resource,
-                     [contents = std::move(contents)](std::optional<Meta>) -> ResourceContentsT { return contents; });
+                     [contents = std::move(contents)](std::optional<Meta>) -> ResourceContents { return contents; });
 }
 
 inline auto McpServer<void>::registerResource(Resource resource,
-                                              std::function<ResourceContentsT(std::optional<Meta>)> contents) -> void {
+                                              std::function<ResourceContents(std::optional<Meta>)> contents) -> void {
     mResources[resource.uri] = contents;
     mResourceList.push_back(resource);
 }

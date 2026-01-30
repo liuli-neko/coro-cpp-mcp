@@ -57,6 +57,7 @@ int ilias_main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
+    NEKO_LOG_EXCLUDE("JsonSerializer");
     ILIAS_NAMESPACE::PlatformContext platform;
     McpServer<MCPTools> server(platform);
     server.setInstructions("This is a test server");

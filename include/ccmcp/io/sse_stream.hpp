@@ -8,6 +8,7 @@
 #include <nekoproto/global/log.hpp>
 #include <nekoproto/jsonrpc/message_stream_wrapper.hpp>
 #include <minihttp/router.hpp>
+#include <chrono>
 
 NEKO_BEGIN_NAMESPACE
 
@@ -146,11 +147,16 @@ private:
 
         co_yield SseEvent { .event = "endpoint", .data = "/message?id=" + std::to_string(id)};
         while (true) {
-            auto text = co_await input.recv();
-            if (!text) {
-                co_return;
+            auto [text, timeout] = co_await ilias::whenAny(input.recv(), ilias::sleep(mKeepAliveInterval));
+            if (text && *text) {
+                if (*text) {
+                    co_yield SseEvent { .event = "message", .data = text->value()};
+                } else {
+                    co_return;
+                }
+            } else {
+                co_yield SseEvent { .comment = "keep-alive" };
             }
-            co_yield SseEvent { .event = "message", .data = *text};
         }
     }
 
@@ -158,7 +164,7 @@ private:
     ilias::WaitHandle<void> mHandle;
     ilias::mpsc::Sender<SseServerStream> mSender;
     ilias::mpsc::Receiver<SseServerStream> mReceiver;
-
+    std::chrono::milliseconds mKeepAliveInterval{15000}; // 15 seconds
     std::map<std::string, ilias::mpsc::Sender<std::string> > mSessions; // endpoint -> sender
     size_t mId = 0;
 };

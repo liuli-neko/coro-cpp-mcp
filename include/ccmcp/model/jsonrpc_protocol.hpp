@@ -44,8 +44,9 @@ struct ResourceListRequestParams {
 struct ToolsListResult {
     /// The list of tools
     std::vector<Tool> tools;
+    std::optional<std::string> nextCursor; // 新增
 
-    NEKO_SERIALIZER(tools)
+    NEKO_SERIALIZER(tools, nextCursor)
 };
 
 struct ToolCallRequestParams {
@@ -90,10 +91,10 @@ struct ListResourcesResult {
 };
 
 struct ListResourceTemplatesResult {
-    std::vector<ResourceTemplate> resources;
+    std::vector<ResourceTemplate> resourceTemplates; 
     std::optional<std::string> nextCursor;
 
-    NEKO_SERIALIZER(resources, nextCursor)
+    NEKO_SERIALIZER(resourceTemplates, nextCursor)
 };
 
 struct ReadResourceRequestParams {
@@ -150,7 +151,7 @@ struct ListPromptsResult {
     std::vector<Prompt> prompts;
     std::optional<std::string> nextCursor;
 
-    NEKO_SERIALIZER(prompts)
+    NEKO_SERIALIZER(prompts, nextCursor)
 };
 
 struct GetPromptRequestParams {
@@ -222,11 +223,11 @@ struct CreateMessageRequestParams {
 
 struct CreateMessageResult {
     Role role;
-    std::variant<TextContent, ImageContent> context;
+    std::variant<TextContent, ImageContent> content;
     std::string model;
     std::optional<std::string> stopReason;
 
-    NEKO_SERIALIZER(role, context, model, stopReason)
+    NEKO_SERIALIZER(role, content, model, stopReason)
 };
 
 struct ResourceReference {
@@ -313,7 +314,7 @@ struct McpJsonRpcMethods {
     RpcMethod<void(SubscribeRequestParams), "resources/subscribe"> resourcesSubscribe;
     RpcMethod<void(UnsubscribeRequestParams), "resources/unsubscribe"> resourcesUnsubscribe;
     RpcMethod<void(ResourceUpdatedNotificationParams), "notifications/resources/updated"> resourcesUpdated;
-    RpcMethod<void(EmptyRequestParams), "prompts/list"> promptsList;
+    RpcMethod<ListPromptsResult(EmptyRequestParams), "prompts/list"> promptsList;
     RpcMethod<GetPromptResult(GetPromptRequestParams), "prompts/get"> promptsGet;
     RpcMethod<void(EmptyRequestParams), "notifications/prompts/list_changed"> promptsListChanged;
     RpcMethod<ToolsListResult(PaginatedRequest), "tools/list"> toolsList;
