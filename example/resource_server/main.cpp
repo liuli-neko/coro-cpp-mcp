@@ -29,7 +29,7 @@ int ilias_main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     ILIAS_NAMESPACE::PlatformContext platform;
     McpServer<void> server(platform);
     server.setInstructions("This is a test resource server");
-    server.setCapabilities(ResourcesCapability{.subscribe = {}, .list_changed = {}});
+    server.setCapabilities(ResourcesCapability{.subscribe = {}, .listChanged = {}});
     // add a local file resource
     auto logFile = ("E:\\workplace\\coro-cpp-mcp\\build\\bin\\log.txt");
     server.registerLocalFileResource("log", logFile);
