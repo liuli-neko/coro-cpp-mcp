@@ -110,7 +110,6 @@ struct DynamicToolFunction : traits::ToolFunctionTraits<T> {
             inputSchema.type       = "object";
             inputSchema.properties = std::map<std::string, JsonSchema>();
         }
-        inputSchema.schema = std::nullopt; // why cline must be null for empty object.
         tl.inputSchema     = std::make_shared<JsonSchema>(std::move(inputSchema));
         return tl;
     }

@@ -11,15 +11,15 @@ using ExperimentalCapabilities = std::map<std::string, JsonValue>;
 using CompletionsCapability = JsonValue;
 
 struct RootsCapabilities {
-    bool list_changed;
+    bool listChanged;
 
-    NEKO_SERIALIZER(list_changed)
+    NEKO_SERIALIZER(listChanged)
 };
 
 struct PromptsCapability {
-    std::optional<bool> list_changed;
+    std::optional<bool> listChanged;
 
-    NEKO_SERIALIZER(list_changed)
+    NEKO_SERIALIZER(listChanged)
 };
 
 struct RootsCapability {
@@ -35,22 +35,22 @@ struct SamplingCapability {
 };
 
 struct ToolsCapability {
-    std::optional<bool> list_changed;
+    std::optional<bool> listChanged;
 
-    NEKO_SERIALIZER(list_changed)
+    NEKO_SERIALIZER(listChanged)
 };
 
 struct LoggingCapability {
-    std::optional<bool> list_changed;
+    std::optional<bool> listChanged;
 
-    NEKO_SERIALIZER(list_changed)
+    NEKO_SERIALIZER(listChanged)
 };
 
 struct ResourcesCapability {
     std::optional<bool> subscribe;
-    std::optional<bool> list_changed;
+    std::optional<bool> listChanged;
 
-    NEKO_SERIALIZER(subscribe, list_changed)
+    NEKO_SERIALIZER(subscribe, listChanged)
 };
 
 struct ClientCapabilities {

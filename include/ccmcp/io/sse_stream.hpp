@@ -125,13 +125,23 @@ private:
     auto processPost(Query request, Text textContent) -> ilias::Task<Text> {
         auto &[params] = request;
         auto &[content] = textContent;
+        NEKO_LOG_INFO("sse", "Received POST /message?id={}, content size: {}", params["id"], content.size());
+        if (!content.empty()) {
+            NEKO_LOG_DEBUG("sse", "Content: {}", content);
+        }
         auto it = mSessions.find(params["id"]);
         if (it == mSessions.end()) {
+            NEKO_LOG_WARN("sse", "Session id '{}' not found. Available sessions: {}", params["id"], mSessions.size());
             co_return Text("Invalid id");
         }
         auto &[_, sender] = *it;
-        co_await sender.send(std::move(content));
-        co_return {};
+        NEKO_LOG_DEBUG("sse", "Sending content to session {}", params["id"]);
+        if (!co_await sender.send(std::move(content))) {
+            NEKO_LOG_ERROR("sse", "Failed to send content to session {}", params["id"]);
+            co_return Text("Failed to send");
+        }
+        NEKO_LOG_DEBUG("sse", "Content sent successfully to session {}", params["id"]);
+        co_return Text("OK");
     }
 
     auto sseGenerator(ilias::mpsc::Receiver<std::string> input, size_t id) -> SseGenerator {
