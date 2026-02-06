@@ -247,6 +247,7 @@ inline auto Router::route(Method method, std::string_view pathView, Fn rawHandle
         if (!args) { // Failed to parse the arguments
             co_return Response {
                 .status = Status::BadRequest,
+                .headers = {},
                 .content = makeGenerator("<html>Bad Request</html>" + args.error().message()),
             };
         }
@@ -374,9 +375,10 @@ inline auto Router::handle(StreamView connStream) -> IoTask<void> {
     }
 }
 
-inline auto Router::onRequest404(Request request) -> Task<Response> {
+inline auto Router::onRequest404([[maybe_unused]] Request request) -> Task<Response> {
     co_return Response {
         .status = Status::NotFound,
+        .headers = {},
         .content = makeGenerator("<html>404 Not Found</html>")
     };
 }

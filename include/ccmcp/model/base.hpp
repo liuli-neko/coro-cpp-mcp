@@ -164,7 +164,7 @@ struct MakeContentHelper<T, std::enable_if_t<std::is_same_v<T, EmbeddedResource>
 template <>
 struct MakeContentHelper<std::string, void> {
     using type = TextContent;
-    static auto make(const std::string& t) { return TextContent{.text = t}; }
+    static auto make(const std::string& t) { return TextContent{.type = "text", .text = t, .annotations = {}}; }
     static auto recover(const TextContent& t) -> std::optional<std::string> { return t.text; }
     template <typename U>
     static auto recover(const U&) -> std::optional<std::string> {
@@ -174,7 +174,7 @@ struct MakeContentHelper<std::string, void> {
 template <>
 struct MakeContentHelper<std::string_view, void> {
     using type = TextContent;
-    static auto make(const std::string_view& t) { return TextContent{.text = std::string(t)}; }
+    static auto make(const std::string_view& t) { return TextContent{.type = "text", .text = std::string(t), .annotations = {}}; }
     static auto recover(const TextContent& t) -> std::optional<std::string> { return t.text; }
     template <typename U>
     static auto recover(const U&) -> std::optional<std::string> {
@@ -184,7 +184,7 @@ struct MakeContentHelper<std::string_view, void> {
 template <>
 struct MakeContentHelper<const char*, void> {
     using type = TextContent;
-    static auto make(const char* t) { return TextContent{.text = std::string(t)}; }
+    static auto make(const char* t) { return TextContent{.type = "text", .text = std::string(t), .annotations = {}}; }
     static auto recover(const TextContent& t) -> std::optional<std::string> { return t.text; }
     template <typename U>
     static auto recover(const U&) -> std::optional<std::string> {
@@ -194,7 +194,7 @@ struct MakeContentHelper<const char*, void> {
 template <>
 struct MakeContentHelper<std::u8string, void> {
     using type = TextContent;
-    static auto make(const std::u8string& t) { return TextContent{.text = std::string(t.begin(), t.end())}; }
+    static auto make(const std::u8string& t) { return TextContent{.type = "text", .text = std::string(t.begin(), t.end()), .annotations = {}}; }
     template <typename U>
     static auto recover(const U&) -> std::optional<std::u8string> {
         return std::nullopt;

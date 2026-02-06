@@ -50,3 +50,5 @@ CMakeLists.txt.user
 CPackConfig.cmake
 CPackSourceConfig.cmake
 install_manifest.txt
+.roo/
+plans/

@@ -91,7 +91,7 @@ struct ListResourcesResult {
 };
 
 struct ListResourceTemplatesResult {
-    std::vector<ResourceTemplate> resourceTemplates; 
+    std::vector<ResourceTemplate> resourceTemplates;
     std::optional<std::string> nextCursor;
 
     NEKO_SERIALIZER(resourceTemplates, nextCursor)

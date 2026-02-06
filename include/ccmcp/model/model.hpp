@@ -9,7 +9,9 @@ NEKO_USE_NAMESPACE
 namespace traits {
 template <typename CallableT>
 struct ToolFunctionTraits {
-    static_assert(std::is_function_v<CallableT>, "ToolFunction parameters or return values ​​must be serializable, and parameters must be structures.");
+    static_assert(
+        std::is_function_v<CallableT>,
+        "ToolFunction parameters or return values ​​must be serializable, and parameters must be structures.");
     static_assert(!std::is_function_v<CallableT>, "ToolFunction must be a function");
 };
 template <typename Ret, typename SerializableT>
@@ -87,11 +89,11 @@ protected:
 
 template <typename T>
 struct DynamicToolFunction : traits::ToolFunctionTraits<T> {
-    using TypeTraits = traits::ToolFunctionTraits<T>;
-    using ParamsT    = TypeTraits::ParamsT;
-    using ReturnT    = TypeTraits::ReturnT;
-    using FunctionT  = TypeTraits::FunctionT;
-    using FunctionTRaw  = TypeTraits::FunctionTRaw;
+    using TypeTraits   = traits::ToolFunctionTraits<T>;
+    using ParamsT      = TypeTraits::ParamsT;
+    using ReturnT      = TypeTraits::ReturnT;
+    using FunctionT    = TypeTraits::FunctionT;
+    using FunctionTRaw = TypeTraits::FunctionTRaw;
 
     DynamicToolFunction(std::string_view name, std::string_view description) : name(name), description(description) {}
 
@@ -110,7 +112,7 @@ struct DynamicToolFunction : traits::ToolFunctionTraits<T> {
             inputSchema.type       = "object";
             inputSchema.properties = std::map<std::string, JsonSchema>();
         }
-        tl.inputSchema     = std::make_shared<JsonSchema>(std::move(inputSchema));
+        tl.inputSchema = std::make_shared<JsonSchema>(std::move(inputSchema));
         return tl;
     }
 
@@ -142,6 +144,16 @@ struct ToolFunction : DynamicToolFunction<T> {
     ToolFunction(std::string_view description) : DynamicToolFunction<T>(FuncName.view(), description) {}
     using DynamicToolFunction<T>::operator=;
     constexpr static std::string_view name = FuncName.view();
+};
+
+template <auto StaticFunction, NEKO_NAMESPACE::ConstexprString FuncName = "">
+struct ToolFunctionS : DynamicToolFunction<typename NEKO_NAMESPACE::detail::function_traits<decltype(StaticFunction)>::function_type> {
+    using FunctionType = typename NEKO_NAMESPACE::detail::function_traits<decltype(StaticFunction)>::function_type;
+    ToolFunctionS(std::string_view description) : DynamicToolFunction<FunctionType>(name, description) {
+        DynamicToolFunction<FunctionType>::operator=(std::function(StaticFunction));
+    }
+    constexpr static std::string_view name =
+        FuncName.view() == "" ? NEKO_NAMESPACE::detail::func_nameof<StaticFunction> : FuncName.view();
 };
 
 CCMCP_EN
