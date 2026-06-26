@@ -2,6 +2,7 @@
 
 #include "ccmcp/global/global.hpp"
 
+#include <nekoproto/serialization/serializer_base.hpp>
 
 #if defined(_WIN32)
 // clang-format off
@@ -20,11 +21,16 @@
 #include <mach/mach.h>
 #endif
 
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
+
 /**
  * @brief 获取当前进程使用的物理内存大小 (Resident Set Size)
  * @return 内存大小，单位为字节。获取失败则返回 0。
  */
-size_t getCurrentRSS() {
+inline size_t getCurrentRSS() {
 #if defined(_WIN32)
     PROCESS_MEMORY_COUNTERS pmc;
     if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {

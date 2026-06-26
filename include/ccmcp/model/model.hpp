@@ -1,7 +1,20 @@
 #pragma once
+
 #include "ccmcp/global/global.hpp"
 
 #include "capabilities.hpp"
+
+#include <ilias/io/error.hpp>
+#include <nekoproto/global/reflect.hpp>
+#include <nekoproto/serialization/json/schema.hpp>
+
+#include <functional>
+#include <map>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
 
 CCMCP_BN
 
@@ -147,7 +160,8 @@ struct ToolFunction : DynamicToolFunction<T> {
 };
 
 template <auto StaticFunction, NEKO_NAMESPACE::ConstexprString FuncName = "">
-struct ToolFunctionS : DynamicToolFunction<typename NEKO_NAMESPACE::detail::function_traits<decltype(StaticFunction)>::function_type> {
+struct ToolFunctionS
+    : DynamicToolFunction<typename NEKO_NAMESPACE::detail::function_traits<decltype(StaticFunction)>::function_type> {
     using FunctionType = typename NEKO_NAMESPACE::detail::function_traits<decltype(StaticFunction)>::function_type;
     ToolFunctionS(std::string_view description) : DynamicToolFunction<FunctionType>(name, description) {
         DynamicToolFunction<FunctionType>::operator=(std::function(StaticFunction));

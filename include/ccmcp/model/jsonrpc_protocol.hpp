@@ -4,6 +4,14 @@
 
 #include "ccmcp/model/capabilities.hpp"
 
+#include <nekoproto/jsonrpc/jsonrpc.hpp>
+
+#include <map>
+#include <optional>
+#include <string>
+#include <variant>
+#include <vector>
+
 CCMCP_BN
 struct EmptyRequestParams {
     std::optional<Meta> _meta;

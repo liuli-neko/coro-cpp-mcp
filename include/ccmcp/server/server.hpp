@@ -4,7 +4,25 @@
 
 #include "ccmcp/model/jsonrpc_protocol.hpp"
 #include "ccmcp/model/model.hpp"
-#include "ccmcp/server/system_info.hpp"
+
+#include <ilias/io/context.hpp>
+#include <ilias/io/error.hpp>
+#include <ilias/task/group.hpp>
+#include <ilias/task/spawn.hpp>
+#include <ilias/task/task.hpp>
+
+#include <filesystem>
+#include <functional>
+#include <iterator>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <variant>
+#include <vector>
 
 CCMCP_BN
 template <typename ToolFunctions>
@@ -60,100 +78,7 @@ private:
     std::map<std::string_view, std::string> mParameters;
 };
 
-// 辅助函数，用于将字符串转为小写，以便进行不区分大小写的比较
-inline std::string to_lower(std::string_view str) {
-    std::string lower_str(str);
-    std::transform(lower_str.begin(), lower_str.end(), lower_str.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-    return lower_str;
-}
-
-// MIME类型映射表，你可以根据需要扩展
-const std::unordered_map<std::string, std::string> MimeTypeMap = {
-    // 文本类型
-    {".txt", "text/plain"},
-    {".md", "text/markdown"},
-    {".json", "application/json"},
-    {".xml", "application/xml"},
-    {".html", "text/html"},
-    {".css", "text/css"},
-    {".js", "application/javascript"},
-    {".py", "text/x-python"},
-    {".cpp", "text/x-c++"},
-    {".hpp", "text/x-c++"},
-    {".h", "text/x-c++"},
-    {".c", "text/x-c"},
-    {".java", "text/x-java-source"},
-    {".rs", "text/rust"},
-    {".toml", "application/toml"},
-    {".yaml", "application/yaml"},
-    {".yml", "application/yaml"},
-    // 二进制类型
-    {".png", "image/png"},
-    {".jpg", "image/jpeg"},
-    {".jpeg", "image/jpeg"},
-    {".gif", "image/gif"},
-    {".webp", "image/webp"},
-    {".pdf", "application/pdf"},
-    {".zip", "application/zip"},
-};
-
-// 核心函数：创建文件资源内容
-auto createResourceContentsFromFile(const std::filesystem::path& path, const std::string& uri) -> ResourceContents {
-    // 安全检查：设置一个最大文件大小限制（例如16MB），防止内存溢出
-    constexpr uintmax_t MAX_FILE_SIZE = 16 * 1024 * 1024;
-
-    try {
-        if (!std::filesystem::exists(path)) {
-            // 文件不存在，返回空的 TextResourceContents，并附带错误信息
-            // 协议本身不支持错误，所以我们返回一个"空"内容
-            NEKO_LOG_WARN("mcp server", "Resource file not found: {}", path.string());
-            return TextResourceContents{.uri = uri, .text = "Error: File not found.", .mimeType = "text/plain"};
-        }
-
-        const auto fileSize = std::filesystem::file_size(path);
-        if (fileSize > MAX_FILE_SIZE) {
-            NEKO_LOG_WARN("mcp server", "Resource file exceeds size limit ({} > {} bytes): {}", fileSize, MAX_FILE_SIZE,
-                          path.string());
-            return TextResourceContents{
-                .uri = uri, .text = "Error: File is too large to read.", .mimeType = "text/plain"};
-        }
-
-        const std::string extension = to_lower(path.extension().string());
-        auto it                     = MimeTypeMap.find(extension);
-        const std::string mimeType  = (it != MimeTypeMap.end()) ? it->second : "application/octet-stream";
-
-        // 判断是文本还是二进制
-        // 简单启发式：如果MIME类型以 "text/" 开头或是已知的文本格式
-        bool isText = (mimeType.rfind("text/", 0) == 0) || mimeType == "application/json" ||
-                      mimeType == "application/javascript" || mimeType == "application/xml";
-
-        if (isText) {
-            std::ifstream file(path);
-            if (!file.is_open()) {
-                return TextResourceContents{
-                    .uri = uri, .text = "Error: Could not open file.", .mimeType = "text/plain"};
-            }
-            std::string textContent((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            return TextResourceContents{.uri = uri, .text = std::move(textContent), .mimeType = mimeType};
-        } else {
-            // 作为二进制文件处理
-            std::ifstream file(path, std::ios::binary);
-            if (!file.is_open()) {
-                return TextResourceContents{
-                    .uri = uri, .text = "Error: Could not open file.", .mimeType = "text/plain"};
-            }
-            // 读取到vector<char>比直接到string更安全
-            std::vector<char> buffer(std::istreambuf_iterator<char>(file), {});
-            auto data = Base64Covert::Encode(buffer);
-            return BlobResourceContents{
-                .uri = uri, .blob = std::string(data.begin(), data.end()), .mimeType = mimeType};
-        }
-    } catch (const std::filesystem::filesystem_error& e) {
-        NEKO_LOG_ERROR("mcp server", "Filesystem error reading resource {}: {}", path.string(), e.what());
-        return TextResourceContents{.uri = uri, .text = "Error: Filesystem error.", .mimeType = "text/plain"};
-    }
-}
+auto createResourceContentsFromFile(const std::filesystem::path& path, const std::string& uri) -> ResourceContents;
 } // namespace detail
 
 template <>
@@ -168,7 +93,7 @@ protected:
     template <typename T>
     using TaskGroup = ILIAS_NAMESPACE::TaskGroup<T>;
     template <typename T>
-    using Unexpected = ILIAS_NAMESPACE::Unexpected<T>;
+    using Unexpected = ILIAS_NAMESPACE::Err<T>;
     template <typename T>
     using JsonRpcServer = NEKO_NAMESPACE::JsonRpcServer<T>;
     template <typename T>
@@ -200,7 +125,7 @@ public:
     template <typename ListenerType>
     auto setListener(ListenerType&& listener) -> void;
     auto close() -> void;
-    auto wait() -> Task<void> { co_await mServer.wait(); }
+    auto wait() -> Task<void>;
     template <typename Ret, typename... Args>
     auto registerToolFunction(std::string_view name, std::function<Ret(Args...)> func,
                               std::string_view description                                     = "",
@@ -209,7 +134,7 @@ public:
     auto registerToolFunction(std::string_view name, std::function<IoTask<Ret>(Args...)> func,
                               std::string_view description                                     = "",
                               const std::map<std::string_view, std::string>& paramsDescription = {}) -> bool;
-    auto jsonRpcServer() -> JsonRpcServer<detail::McpJsonRpcMethods>& { return mServer; };
+    auto jsonRpcServer() -> JsonRpcServer<detail::McpJsonRpcMethods>&;
     auto registerLocalFileResource(std::string_view name, std::filesystem::path path, std::string_view uri = "",
                                    std::string_view description = "") -> bool;
     auto registerResource(Resource resource, ResourceContents) -> void;
@@ -246,77 +171,6 @@ private:
 private:
     ToolFunctions mToolFunctions;
 };
-
-inline McpServer<void>::McpServer(IoContext& ctx) : mServer(ctx) { _register_rpc_methods(); }
-
-inline auto McpServer<void>::setCapabilities(const ExperimentalCapabilities& capabilities) noexcept -> void {
-    mCapabilities.experimental = capabilities;
-}
-inline auto McpServer<void>::setCapabilities(const LoggingCapability& capabilities) noexcept -> void {
-    mCapabilities.logging = capabilities;
-}
-inline auto McpServer<void>::setCapabilities(const CompletionsCapability& capabilities) noexcept -> void {
-    mCapabilities.completions = capabilities;
-}
-inline auto McpServer<void>::setCapabilities(const PromptsCapability& capabilities) noexcept -> void {
-    mCapabilities.prompts = capabilities;
-}
-inline auto McpServer<void>::setCapabilities(const ResourcesCapability& capabilities) noexcept -> void {
-    mCapabilities.resources = capabilities;
-}
-inline auto McpServer<void>::setCapabilities(const ToolsCapability& capabilities) noexcept -> void {
-    mCapabilities.tools = capabilities;
-}
-
-inline void McpServer<void>::setInstructions(std::string_view instructions) noexcept { mInstructions = instructions; }
-
-inline void McpServer<void>::_register_rpc_methods() {
-    mServer->initialize  = std::bind(&McpServer::_initialize, this, std::placeholders::_1);
-    mServer->initialized = std::function<IoTask<void>(EmptyRequestParams)>(
-        std::bind(&McpServer::_initialized, this, std::placeholders::_1));
-    mServer->toolsList     = std::bind(&McpServer::_tools_list, this, std::placeholders::_1);
-    mServer->toolsCall     = std::bind(&McpServer::_tools_call, this, std::placeholders::_1);
-    mServer->resourcesList = [this](EmptyRequestParams) -> ListResourcesResult {
-        return ListResourcesResult{.resources = mResourceList, .nextCursor = std::nullopt};
-    }; // TODO: MUST IMPL 默认没有任何资源模板
-    mServer->resourcesTemplatesList = [](EmptyRequestParams) -> ListResourceTemplatesResult {
-        return ListResourceTemplatesResult{.resourceTemplates = {}, .nextCursor = std::nullopt};
-    }; // TODO: MUST IMPL
-    mServer->resourcesRead = [this](ReadResourceRequestParams request) -> ReadResourceResult {
-        ReadResourceResult result;
-        NEKO_LOG_INFO("mcp server", "read resource {}", request.uri);
-        if (auto it = mResources.find(request.uri); it != mResources.end()) {
-            result.contents.push_back(it->second(request._meta));
-        }
-        return result;
-    };
-    mServer->ping                 = [](EmptyRequestParams) -> EmptyResult { return {}; };
-    mServer->progress             = [](ProgressNotificationParams) -> void {};
-    mServer->resourcesListChanged = [](EmptyRequestParams) -> void {};
-    mServer->resourcesSubscribe   = [](SubscribeRequestParams) -> void {};
-    mServer->resourcesUnsubscribe = [](UnsubscribeRequestParams) -> void {};
-    mServer->resourcesUpdated     = [](ResourceUpdatedNotificationParams) -> void {};
-    mServer->promptsList          = [](EmptyRequestParams) -> ListPromptsResult {
-        return ListPromptsResult{.prompts = {}, .nextCursor = std::nullopt};
-    };
-    mServer->promptsGet = [](GetPromptRequestParams) -> GetPromptResult {
-        return GetPromptResult{.description = "default", .messages = {}, ._meta = std::nullopt};
-    };
-    mServer->promptsListChanged = [](EmptyRequestParams) -> void {};
-    mServer->toolsListChanged   = [](EmptyRequestParams) -> void {};
-    mServer->loggingSetLevel    = [](SetLevelRequestParams) -> void {};
-    mServer->loggingMessage     = [](LoggingMessageNotificationParams) -> void {};
-    mServer->createMessage      = [](CreateMessageRequestParams) -> void {};
-    mServer->completionComplete = [](CompleteRequestParams) -> CompleteResult {
-        return CompleteResult{.completion = {.values = {}, .total = 0, .hasMore = false}, ._meta = std::nullopt};
-    };
-    mServer->rootsList = [](EmptyRequestParams) -> ListRootsResult {
-        return ListRootsResult{.roots = {}, ._meta = std::nullopt};
-    };
-    mServer->rootsListChanged = [](EmptyRequestParams) -> void {};
-    mServer->cancelled        = std::function<IoTask<void>(CancelledNotificationParams)>(
-        std::bind(&McpServer::_cancelled, this, std::placeholders::_1));
-}
 
 namespace detail {
 template <typename T>
@@ -355,7 +209,7 @@ struct RpcMethodWrapperImpl : public RpcMethodWrapper {
         }
         using RetT = typename MethodT::ReturnT;
         CallToolResult result{.content = {}, .isError = true, .metadata = {}};
-        Result<RetT> respon = ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::IoError::Unknown);
+        Result<RetT> respon = ILIAS_NAMESPACE::Err(ILIAS_NAMESPACE::IoError::Unknown);
         if constexpr (std::is_void_v<typename MethodT::ParamsT>) {
             respon = co_await (*method)();
         } else {
@@ -397,20 +251,6 @@ void McpServer<ToolFunctions>::_register_tool_functions() {
     }
 }
 
-inline auto McpServer<void>::_initialize(InitializeRequestParams params) noexcept -> IoTask<InitializeResult> {
-    NEKO_LOG_INFO("mcp server", "initialize protocol version: {}", params.protocolVersion);
-    co_return InitializeResult{.protocolVersion = LATEST_PROTOCOL_VERSION,
-                               .capabilities    = mCapabilities,
-                               .serverInfo =
-                                   Implementation{.name = CCMCP_PROJECT_NAME, .version = CCMCP_VERSION_STRING},
-                               .instructions = mInstructions};
-}
-
-inline auto McpServer<void>::_initialized(EmptyRequestParams) noexcept -> IoTask<void> {
-    NEKO_LOG_INFO("mcp server", "initialized");
-    co_return {};
-}
-
 template <typename StreamType>
 inline auto McpServer<void>::addTransport(StreamType&& stream) -> void {
     mServer.addTransport(std::forward<StreamType>(stream));
@@ -419,16 +259,6 @@ inline auto McpServer<void>::addTransport(StreamType&& stream) -> void {
 template <typename ListenerType>
 inline auto McpServer<void>::setListener(ListenerType&& listener) -> void {
     mServer.setListener(std::forward<ListenerType>(listener));
-}
-
-inline auto McpServer<void>::close() -> void { mServer.close(); }
-
-inline ToolsListResult McpServer<void>::toolsList([[maybe_unused]] const PaginatedRequest& params) {
-    ToolsListResult result;
-    for (const auto& tool : mTools) {
-        result.tools.push_back(tool());
-    }
-    return result;
 }
 
 template <typename ToolFunctions>
@@ -446,77 +276,6 @@ template <typename ToolFunctions>
 auto McpServer<ToolFunctions>::registerToolFunction(std::string_view name)
     -> detail::RegisterFunctionHelper<McpServer> {
     return detail::RegisterFunctionHelper<McpServer>(*this, name);
-}
-
-inline auto McpServer<void>::_tools_list(PaginatedRequest params) noexcept -> IoTask<ToolsListResult> {
-    co_return toolsList(params);
-}
-
-inline auto McpServer<void>::_cancelled(CancelledNotificationParams params) noexcept -> IoTask<void> {
-    NEKO_LOG_INFO("mcp server", "cancell {} beacuse {}",
-                  params.requestId.index() == 0 ? std::to_string(std::get<0>(params.requestId))
-                                                : std::get<1>(params.requestId),
-                  params.reason.has_value() ? *params.reason : "unknown reason");
-    switch (params.requestId.index()) {
-    case 0:
-        mServer.cancel(std::get<0>(params.requestId));
-        break;
-    case 1:
-        mServer.cancel(std::get<1>(params.requestId));
-        break;
-    }
-    co_return {};
-}
-
-inline auto McpServer<void>::_tools_call(ToolCallRequestParams params) noexcept -> IoTask<CallToolResult> {
-    auto time = std::chrono::high_resolution_clock::now();
-    CallToolResult result{.content = {}, .isError = true, .metadata = {}};
-    ToolCallInfo info;
-    if (auto item = mHandlers.find(params.name); item != mHandlers.end()) {
-        JsonSerializer::InputSerializer in(params.arguments);
-        if (auto ret = co_await (*item->second)(in); ret) {
-            result = ret.value();
-        } else {
-            result.isError = true;
-        }
-    } else {
-        info.error = "Tool " + params.name + " not found";
-    }
-    info.executionTime =
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - time).count();
-    info.resourceUsage.memory = std::to_string(getCurrentRSS() / 1024) + "KB";
-    result.metadata           = NEKO_NAMESPACE::to_json_value(info);
-    co_return result;
-}
-
-inline auto McpServer<void>::registerLocalFileResource(std::string_view name, std::filesystem::path path,
-                                                       std::string_view uri, std::string_view description) -> bool {
-    if (!std::filesystem::exists(path)) {
-        return false;
-    }
-    Resource resource;
-    resource.name = std::string(name);
-    resource.uri  = uri.empty() ? "file://" + path.string() : std::string(uri);
-    if (!description.empty()) {
-        resource.description = std::string(description);
-    }
-    resource.metadata = ResourceMetadata{.type = "file", .size = std::filesystem::file_size(path)};
-    registerResource(resource, [path = path, uri = resource.uri](std::optional<Meta>) -> ResourceContents {
-        auto contents = detail::createResourceContentsFromFile(path, uri);
-        return contents;
-    });
-    return true;
-}
-
-inline auto McpServer<void>::registerResource(Resource resource, ResourceContents contents) -> void {
-    registerResource(resource,
-                     [contents = std::move(contents)](std::optional<Meta>) -> ResourceContents { return contents; });
-}
-
-inline auto McpServer<void>::registerResource(Resource resource,
-                                              std::function<ResourceContents(std::optional<Meta>)> contents) -> void {
-    mResources[resource.uri] = contents;
-    mResourceList.push_back(resource);
 }
 
 template <typename Ret, typename... Args>
@@ -550,7 +309,7 @@ auto McpServer<void>::registerToolFunction(std::string_view name, std::function<
     rpcMethodMetadata.paramsDescription = paramsDescription;
     auto wrapper = std::make_unique<detail::RpcMethodWrapperImpl<std::unique_ptr<MethodT>, void>>(
         std::make_unique<MethodT>(std::move(rpcMethodMetadata)), this);
-    mTools.push_back(std::function([method = &wrapper->method.get()]() { return method->tool(); }));
+    mTools.push_back(std::function([method = wrapper->method.get()]() { return method->tool(); }));
     mHandlers[name] = std::move(wrapper);
     return true;
 }

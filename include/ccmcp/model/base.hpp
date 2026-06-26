@@ -2,6 +2,19 @@
 
 #include "ccmcp/global/global.hpp"
 
+#include <nekoproto/serialization/serializer_base.hpp>
+
+#include <charconv>
+#include <concepts>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <type_traits>
+#include <variant>
+#include <vector>
+
 CCMCP_BN
 
 enum class Role {
@@ -174,7 +187,9 @@ struct MakeContentHelper<std::string, void> {
 template <>
 struct MakeContentHelper<std::string_view, void> {
     using type = TextContent;
-    static auto make(const std::string_view& t) { return TextContent{.type = "text", .text = std::string(t), .annotations = {}}; }
+    static auto make(const std::string_view& t) {
+        return TextContent{.type = "text", .text = std::string(t), .annotations = {}};
+    }
     static auto recover(const TextContent& t) -> std::optional<std::string> { return t.text; }
     template <typename U>
     static auto recover(const U&) -> std::optional<std::string> {
@@ -194,7 +209,9 @@ struct MakeContentHelper<const char*, void> {
 template <>
 struct MakeContentHelper<std::u8string, void> {
     using type = TextContent;
-    static auto make(const std::u8string& t) { return TextContent{.type = "text", .text = std::string(t.begin(), t.end()), .annotations = {}}; }
+    static auto make(const std::u8string& t) {
+        return TextContent{.type = "text", .text = std::string(t.begin(), t.end()), .annotations = {}};
+    }
     template <typename U>
     static auto recover(const U&) -> std::optional<std::u8string> {
         return std::nullopt;
@@ -209,7 +226,7 @@ template <typename T>
     } && std::is_arithmetic_v<T>
 struct MakeContentHelper<T, void> {
     using type = TextContent;
-    static auto make(const T& t) { return TextContent{.text = std::to_string(t)}; }
+    static auto make(const T& t) { return TextContent{.type = "text", .text = std::to_string(t), .annotations = {}}; }
     static auto recover(const TextContent& t) -> std::optional<T> {
         T result;
         if (auto er = std::from_chars(t.text.data(), t.text.data() + t.text.size(), result);

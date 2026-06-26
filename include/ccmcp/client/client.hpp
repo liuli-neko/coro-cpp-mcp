@@ -4,6 +4,20 @@
 
 #include "ccmcp/model/jsonrpc_protocol.hpp"
 
+#include <ilias/io/context.hpp>
+#include <ilias/io/error.hpp>
+#include <ilias/task/scope.hpp>
+
+#include <functional>
+#include <iterator>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <variant>
+#include <vector>
+
 CCMCP_BN
 template <typename ToolFunctions>
 class McpClient;
@@ -19,7 +33,7 @@ protected:
     using IliasError = ILIAS_NAMESPACE::IoError;
     using TaskScope  = ILIAS_NAMESPACE::TaskScope;
     template <typename T>
-    using Unexpected = ILIAS_NAMESPACE::Unexpected<T>;
+    using Err = ILIAS_NAMESPACE::Err<T>;
     template <typename T>
     using JsonRpcClient = NEKO_NAMESPACE::JsonRpcClient<T>;
     template <typename T>
@@ -100,16 +114,16 @@ public:
         auto ret = co_await mClient->toolsCall(
             ToolCallRequestParams{.name = std::string(name), .arguments = NEKO_NAMESPACE::to_json_value(arg)});
         if (!ret) {
-            co_return Unexpected(ret.error());
+            co_return Err(ret.error());
         }
         CallToolResult result = ret.value();
         if (result.isError) {
-            co_return Unexpected(IliasError::Unknown);
+            co_return Err(IliasError::Unknown);
         }
         if (auto ret1 = handlerCallResult<RetT>(result.content); ret1) {
             co_return *ret1;
         } else {
-            co_return Unexpected(IliasError::Unknown);
+            co_return Err(IliasError::Unknown);
         }
     }
     template <typename Arg>
@@ -120,23 +134,25 @@ public:
     }
     template <typename RetT>
     auto callRemote(std::string_view name) -> ILIAS_NAMESPACE::IoTask<RetT> {
-        auto ret = co_await mClient->toolsCall(ToolCallRequestParams{.name = std::string(name)});
+        auto ret = co_await mClient->toolsCall(
+            ToolCallRequestParams{.name = std::string(name), .arguments = JsonValue{}, ._meta = {}});
         if (!ret) {
-            co_return Unexpected(ret.error());
+            co_return Err(ret.error());
         }
         CallToolResult result = ret.value();
         if (result.isError) {
-            co_return Unexpected(IliasError::Unknown);
+            co_return Err(IliasError::Unknown);
         }
         if (auto ret = handlerCallResult<RetT>(result.content); ret) {
             co_return *ret;
         } else {
-            co_return Unexpected(IliasError::Unknown);
+            co_return Err(IliasError::Unknown);
         }
     }
 
     auto notifyRemote(std::string_view name) -> ILIAS_NAMESPACE::IoTask<void> {
-        return mClient->toolsCall.notification(ToolCallRequestParams{.name = std::string(name)});
+        return mClient->toolsCall.notification(
+            ToolCallRequestParams{.name = std::string(name), .arguments = JsonValue{}, ._meta = {}});
     }
 
 private:

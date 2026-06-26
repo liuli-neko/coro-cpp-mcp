@@ -4,11 +4,18 @@
 
 #include "ccmcp/model/base.hpp"
 
+#include <nekoproto/serialization/json/schema.hpp>
+
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+
 CCMCP_BN
 using NEKO_NAMESPACE::JsonSchema;
 using JsonValue                = NEKO_NAMESPACE::JsonSerializer::JsonValue;
 using ExperimentalCapabilities = std::map<std::string, JsonValue>;
-using CompletionsCapability = JsonValue;
+using CompletionsCapability    = JsonValue;
 
 struct RootsCapabilities {
     bool listChanged;
@@ -129,10 +136,3 @@ struct Tool {
     NEKO_SERIALIZER(name, description, inputSchema, annotations)
 };
 CCMCP_EN
-
-NEKO_BEGIN_NAMESPACE
-
-template <>
-struct is_minimal_serializable<ccmcp::PaginatedRequest> : std::true_type {};
-
-NEKO_END_NAMESPACE

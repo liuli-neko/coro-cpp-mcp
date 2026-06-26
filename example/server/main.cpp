@@ -85,7 +85,7 @@ int ilias_main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     };
 
     // TODO: add server code here
-#if 0
+#if 1
     StdioStream stdio;
     co_await stdio.start();
     server.addTransport(std::move(stdio));

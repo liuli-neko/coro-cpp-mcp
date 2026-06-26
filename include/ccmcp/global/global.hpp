@@ -2,17 +2,7 @@
 
 #include "config.h"
 
-#include <charconv>
-#include <filesystem>
-#include <fstream>
-#include <ilias/task/scope.hpp>
-#include <ilias/io/error.hpp>
-#include <nekoproto/jsonrpc/jsonrpc.hpp>
-#include <nekoproto/serialization/json/schema.hpp>
-#include <nekoproto/serialization/serializer_base.hpp>
-#include <nekoproto/serialization/types/types.hpp>
-#include <optional>
-
+#include <nekoproto/global/global.hpp>
 
 #ifndef CCMCP_NAMESPACE
 #define CCMCP_NAMESPACE ccmcp
