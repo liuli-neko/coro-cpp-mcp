@@ -122,8 +122,6 @@ public:
     virtual auto toolsList(const PaginatedRequest&) -> ToolsListResult;
     template <typename StreamType>
     auto addTransport(StreamType&& stream) -> void;
-    template <typename ListenerType>
-    auto setListener(ListenerType&& listener) -> void;
     auto close() -> void;
     auto wait() -> Task<void>;
     template <typename Ret, typename... Args>
@@ -253,12 +251,7 @@ void McpServer<ToolFunctions>::_register_tool_functions() {
 
 template <typename StreamType>
 inline auto McpServer<void>::addTransport(StreamType&& stream) -> void {
-    mServer.addTransport(std::forward<StreamType>(stream));
-}
-
-template <typename ListenerType>
-inline auto McpServer<void>::setListener(ListenerType&& listener) -> void {
-    mServer.setListener(std::forward<ListenerType>(listener));
+    mServer.addEndpoint(std::forward<StreamType>(stream));
 }
 
 template <typename ToolFunctions>

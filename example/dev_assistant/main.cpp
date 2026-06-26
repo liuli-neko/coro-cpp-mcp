@@ -138,7 +138,13 @@ int ilias_main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         co_return -1;
     }
     SseListener sse(std::move(*listener));
-    server.setListener<SseListener>(std::move(sse));
+    while (1) {
+        if (auto ret = co_await sse.accept(); ret) {
+            server.addTransport(std::move(*ret));
+        } else {
+            break;
+        }
+    }
 #endif
 
     co_await server.wait();

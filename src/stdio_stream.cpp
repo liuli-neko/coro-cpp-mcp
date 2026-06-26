@@ -36,7 +36,7 @@ auto StdioStream::recv(std::vector<std::byte>& buffer) -> IoTask<void> {
         NEKO_LOG_ERROR("DatagramClient", "recv: client not init");
         co_return ILIAS_NAMESPACE::Err(JsonRpcError::ClientNotInit);
     }
-    if (auto ret = co_await (mImpl->in.getline("\n") | ILIAS_NAMESPACE::unstoppable()); ret) {
+    if (auto ret = co_await (mImpl->in.getline("\n")); ret) {
         std::swap(mImpl->json, ret.value());
         NEKO_LOG_INFO("DatagramClient", "recv: {}", mImpl->json);
         if (mImpl->json.find('{') == std::string::npos && mImpl->json.find('[') == std::string::npos &&
@@ -82,8 +82,6 @@ auto StdioStream::close() -> void {
     }
 }
 
-auto StdioStream::cancel() -> void { NEKO_LOG_ERROR("DatagramClient", "cancel not implemented"); }
-
 auto StdioStream::start() -> IoTask<void> {
     NEKO_LOG_INFO("DatagramClient", "start ");
     if (!mImpl || !mImpl->in) {
@@ -95,6 +93,22 @@ auto StdioStream::start() -> IoTask<void> {
         co_return ILIAS_NAMESPACE::Err(ILIAS_NAMESPACE::IoError::BadFileDescriptor);
     }
     co_return {};
+}
+
+auto StdioStream::shutdown() -> IoTask<void> {
+    NEKO_LOG_INFO("DatagramClient", "shutdown ");
+    if (!mImpl || !mImpl->out) {
+        co_return ILIAS_NAMESPACE::Err(ILIAS_NAMESPACE::IoError::BadFileDescriptor);
+    }
+    co_return co_await mImpl->out.shutdown();
+}
+
+auto StdioStream::flush() -> IoTask<void> {
+    NEKO_LOG_INFO("DatagramClient", "flush ");
+    if (!mImpl || !mImpl->out) {
+        co_return ILIAS_NAMESPACE::Err(ILIAS_NAMESPACE::IoError::BadFileDescriptor);
+    }
+    co_return co_await mImpl->out.flush();
 }
 
 NEKO_END_NAMESPACE

@@ -222,7 +222,7 @@ auto McpServer<void>::_cancelled(CancelledNotificationParams params) noexcept ->
                   params.reason.has_value() ? *params.reason : "unknown reason");
     switch (params.requestId.index()) {
     case 0:
-        mServer.cancel(std::get<0>(params.requestId));
+        mServer.cancel((uint32_t)std::get<0>(params.requestId));
         break;
     case 1:
         mServer.cancel(std::get<1>(params.requestId));

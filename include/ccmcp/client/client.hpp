@@ -104,7 +104,7 @@ public:
 
     template <typename StreamType>
     auto setTransport(StreamType&& transport) -> void {
-        return mClient.setTransport(std::forward<StreamType>(transport));
+        return mClient.setEndpoint(std::forward<StreamType>(transport));
     }
     auto close() -> void { mClient.close(); }
     auto isConnected() const -> bool { return mClient.isConnected(); }

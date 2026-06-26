@@ -28,8 +28,9 @@ public:
     auto recv(std::vector<std::byte>& buffer) -> IoTask<void>;
     auto send(std::span<const std::byte> data) -> IoTask<void>;
     auto close() -> void;
-    auto cancel() -> void;
     auto start() -> IoTask<void>;
+    auto shutdown() -> IoTask<void>;
+    auto flush() -> IoTask<void>;
 
 private:
     struct Impl;

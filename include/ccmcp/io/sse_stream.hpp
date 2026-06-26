@@ -24,8 +24,9 @@ public:
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<void>;
     auto send(std::span<const std::byte> data) -> ilias::IoTask<void>;
     auto close() -> void;
-    auto cancel() -> void;
     auto start() -> ilias::IoTask<void>;
+    auto shutdown() -> ilias::IoTask<void>;
+    auto flush() -> ilias::IoTask<void>;
 
     auto operator=(SseServerStream&&) noexcept -> SseServerStream&;
 

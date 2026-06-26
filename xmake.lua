@@ -57,7 +57,7 @@ add_requires("neko-proto-tools")
 -- normal libraries' dependencies configurations
 add_requireconfs("**ilias", {override = true, version = "0.4.2", configs = {shared = is_config("3rd_kind", "shared"), stdcxx = get_config("stdcxx")}})
 add_requireconfs("**fmt", {override = true, version = "11.0.x", configs = {shared = is_config("3rd_kind", "shared"), header_only = true}})
-add_requireconfs("**neko-proto-tools", {override = true, version = "dev", configs = {shared = is_config("3rd_kind", "shared"), enable_rapidxml = false, enable_simdjson = false, enable_protocol = false, enable_rapidjson = true, enable_fmt = true, enable_communication = false, stdcxx = get_config("stdcxx")}})
+add_requireconfs("**neko-proto-tools", {override = true, version = "x.x.x", configs = {shared = is_config("3rd_kind", "shared"), enable_rapidxml = false, enable_simdjson = false, enable_protocol = false, enable_rapidjson = true, enable_fmt = true, enable_communication = false, stdcxx = get_config("stdcxx")}})
 add_requireconfs("**rapidjson", {override = true, configs = {header_only = true}})
 
 if is_mode("debug") then

@@ -62,9 +62,23 @@ auto SseServerStream::close() -> void {
     mImpl->input.close();
 }
 
-auto SseServerStream::cancel() -> void {}
-
 auto SseServerStream::start() -> ilias::IoTask<void> { co_return {}; }
+
+auto SseServerStream::shutdown() -> ilias::IoTask<void> {
+    if (!mImpl) {
+        co_return ilias::Err(ilias::IoError::Canceled);
+    }
+    mImpl->output.close();
+    mImpl->input.close();
+    co_return {};
+}
+
+auto SseServerStream::flush() -> ilias::IoTask<void> {
+    if (!mImpl) {
+        co_return ilias::Err(ilias::IoError::Canceled);
+    }
+    co_return {};
+}
 
 struct SseListener::Impl {
     using SseEvent     = minihttp::server::SseEvent;
