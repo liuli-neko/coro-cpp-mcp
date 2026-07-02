@@ -312,30 +312,67 @@ namespace detail {
 NEKO_USE_NAMESPACE
 
 struct McpJsonRpcMethods {
-    RpcMethod<InitializeResult(InitializeRequestParams), "initialize"> initialize;
-    RpcMethod<void(EmptyRequestParams), "notifications/initialized"> initialized;
-    RpcMethod<ListResourcesResult(EmptyRequestParams), "resources/list"> resourcesList;
-    RpcMethod<ListResourceTemplatesResult(EmptyRequestParams), "resources/templates/list"> resourcesTemplatesList;
-    RpcMethod<ReadResourceResult(ReadResourceRequestParams), "resources/read"> resourcesRead;
-    RpcMethod<void(ProgressNotificationParams), "notifications/progress"> progress;
-    RpcMethod<void(EmptyRequestParams), "notifications/resources/list_changed"> resourcesListChanged;
-    RpcMethod<void(SubscribeRequestParams), "resources/subscribe"> resourcesSubscribe;
-    RpcMethod<void(UnsubscribeRequestParams), "resources/unsubscribe"> resourcesUnsubscribe;
-    RpcMethod<void(ResourceUpdatedNotificationParams), "notifications/resources/updated"> resourcesUpdated;
-    RpcMethod<ListPromptsResult(EmptyRequestParams), "prompts/list"> promptsList;
-    RpcMethod<GetPromptResult(GetPromptRequestParams), "prompts/get"> promptsGet;
-    RpcMethod<void(EmptyRequestParams), "notifications/prompts/list_changed"> promptsListChanged;
-    RpcMethod<ToolsListResult(PaginatedRequest), "tools/list"> toolsList;
-    RpcMethod<CallToolResult(ToolCallRequestParams), "tools/call"> toolsCall;
-    RpcMethod<void(EmptyRequestParams), "notifications/tools/list_changed"> toolsListChanged;
-    RpcMethod<void(SetLevelRequestParams), "logging/setLevel"> loggingSetLevel;
-    RpcMethod<void(LoggingMessageNotificationParams), "notifications/message"> loggingMessage;
-    RpcMethod<void(CreateMessageRequestParams), "sampling/createMessage"> createMessage;
-    RpcMethod<CompleteResult(CompleteRequestParams), "completion/complete"> completionComplete;
-    RpcMethod<ListRootsResult(EmptyRequestParams), "roots/list"> rootsList;
-    RpcMethod<void(EmptyRequestParams), "notifications/roots/list_changed"> rootsListChanged;
-    RpcMethod<void(CancelledNotificationParams), "notifications/cancelled"> cancelled;
-    RpcMethod<EmptyResult(EmptyRequestParams), "ping"> ping;
+    RpcMethodSpec<InitializeResult(InitializeRequestParams), rpc_name<"initialize">,
+                  rpc_args<"initialize_request_params">, rpc_desc<"Initialize the connection">>
+        initialize;
+    RpcMethodSpec<void(EmptyRequestParams), rpc_name<"notifications/initialized">,
+                  rpc_desc<"Notification that the client has initialized">, rpc_notification>
+        initialized;
+    RpcMethodSpec<ListResourcesResult(EmptyRequestParams), rpc_name<"resources/list">, rpc_desc<"List resources">>
+        resourcesList;
+    RpcMethodSpec<ListResourceTemplatesResult(EmptyRequestParams), rpc_name<"resources/templates/list">,
+                  rpc_desc<"List resource templates">>
+        resourcesTemplatesList;
+    RpcMethodSpec<ReadResourceResult(ReadResourceRequestParams), rpc_name<"resources/read">,
+                  rpc_args<"read_resource_request_params">, rpc_desc<"Read a resource">>
+        resourcesRead;
+    RpcMethodSpec<void(ProgressNotificationParams), rpc_name<"notifications/progress">,
+                  rpc_args<"progress_notification_params">, rpc_desc<"Progress notification">, rpc_notification>
+        progress;
+    RpcMethodSpec<void(EmptyRequestParams), rpc_name<"notifications/resources/list_changed">,
+                  rpc_desc<"Notification that the list of resources has changed">, rpc_notification>
+        resourcesListChanged;
+    RpcMethodSpec<void(SubscribeRequestParams), rpc_name<"resources/subscribe">, rpc_desc<"Subscribe to resources">,
+                  rpc_args<"subscribe_request_params">>
+        resourcesSubscribe;
+    RpcMethodSpec<void(UnsubscribeRequestParams), rpc_name<"resources/unsubscribe">,
+                  rpc_desc<"Unsubscribe from resources">, rpc_args<"unsubscribe_request_params">>
+        resourcesUnsubscribe;
+    RpcMethodSpec<void(ResourceUpdatedNotificationParams), rpc_name<"notifications/resources/updated">,
+                  rpc_args<"resource_updated_notification_params">,
+                  rpc_desc<"Notification that a resource has been updated">>
+        resourcesUpdated;
+    RpcMethodSpec<ListPromptsResult(EmptyRequestParams), rpc_name<"prompts/list">, rpc_desc<"Get the list of prompts">>
+        promptsList;
+    RpcMethodSpec<GetPromptResult(GetPromptRequestParams), rpc_name<"prompts/get">, rpc_desc<"Get a prompt">>
+        promptsGet;
+    RpcMethodSpec<void(EmptyRequestParams), rpc_name<"notifications/prompts/list_changed">,
+                  rpc_desc<"list of prompts has changed">, rpc_notification>
+        promptsListChanged;
+    RpcMethodSpec<ToolsListResult(PaginatedRequest), rpc_name<"tools/list">,
+                  rpc_desc<R"(Get the list of tools functioning on the server)">, rpc_args<"paginated_request">>
+        toolsList;
+    RpcMethodSpec<CallToolResult(ToolCallRequestParams), rpc_name<"tools/call">, rpc_desc<"Call a tool">,
+                  rpc_args<"tool_call_request_params">>
+        toolsCall;
+    RpcMethodSpec<void(EmptyRequestParams), rpc_name<"notifications/tools/list_changed">,
+                  rpc_desc<"tools list has changed">, rpc_notification>
+        toolsListChanged;
+    RpcMethodSpec<void(SetLevelRequestParams), rpc_name<"logging/setLevel">, rpc_desc<"Set logging level">>
+        loggingSetLevel;
+    RpcMethodSpec<void(LoggingMessageNotificationParams), rpc_name<"notifications/message">, rpc_desc<"Log message">>
+        loggingMessage;
+    RpcMethodSpec<void(CreateMessageRequestParams), rpc_name<"sampling/createMessage">, rpc_desc<"Create message">>
+        createMessage;
+    RpcMethodSpec<CompleteResult(CompleteRequestParams), rpc_name<"completion/complete">, rpc_desc<"Complete">>
+        completionComplete;
+    RpcMethodSpec<ListRootsResult(EmptyRequestParams), rpc_name<"roots/list">, rpc_desc<"List roots">> rootsList;
+    RpcMethodSpec<void(EmptyRequestParams), rpc_name<"notifications/roots/list_changed">,
+                  rpc_desc<"Roots list has changed">>
+        rootsListChanged;
+    RpcMethodSpec<void(CancelledNotificationParams), rpc_name<"notifications/cancelled">, rpc_desc<"Cancelled">>
+        cancelled;
+    RpcMethodSpec<EmptyResult(EmptyRequestParams), rpc_name<"ping">, rpc_desc<"Ping">> ping;
 };
 } // namespace detail
 

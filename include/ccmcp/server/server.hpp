@@ -137,6 +137,7 @@ public:
                                    std::string_view description = "") -> bool;
     auto registerResource(Resource resource, ResourceContents) -> void;
     auto registerResource(Resource resource, std::function<ResourceContents(std::optional<Meta> meta)>) -> void;
+    auto server() -> JsonRpcServer<detail::McpJsonRpcMethods>& { return mServer; }
 
 protected:
     JsonRpcServer<detail::McpJsonRpcMethods> mServer;

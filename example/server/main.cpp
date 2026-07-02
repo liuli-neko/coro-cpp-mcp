@@ -1,4 +1,6 @@
 #include <ilias/platform.hpp>
+#include <nekoproto/argparser/argparser.hpp>
+#include <nekoproto/argparser/error.hpp>
 #include <nekoproto/serialization/to_string.hpp>
 
 #include "ccmcp/io/sse_stream.hpp"
@@ -8,6 +10,37 @@
 
 NEKO_USE_NAMESPACE
 CCMCP_USE_NAMESPACE
+struct SSEConfig {
+    std::string host;
+    int port;
+};
+
+struct CommandConfig {
+    argparser::ArgCommand stdio;
+    SSEConfig sse;
+};
+
+template <>
+struct NEKO_NAMESPACE::Meta<CommandConfig> {
+    constexpr static auto value =
+        Object("stdio",
+               make_tags<argparser::arg_help<"Start server with stdio">, argparser::ArgTags{.command = true}>(
+                   &CommandConfig::stdio),
+               "sse",
+               make_tags<argparser::arg_help<"Start server with sse">, argparser::ArgTags{.command = true}>(
+                   &CommandConfig::sse));
+};
+
+template <>
+struct NEKO_NAMESPACE::Meta<SSEConfig> {
+    constexpr static auto value = Object(
+        "host",
+        make_tags<argparser::arg_default<"127.0.0.1"_cs>, argparser::arg_short_name<'u'>,
+                  argparser::arg_help<"Server host">>(&SSEConfig::host),
+        "port",
+        make_tags<argparser::arg_default<8848>, argparser::arg_short_name<'p'>, argparser::arg_help<"Server port">,
+                  argparser::ArgTags{.range_min = 0, .range_max = 65535}>(&SSEConfig::port));
+};
 
 struct TowParams {
     double a;
@@ -84,25 +117,47 @@ int ilias_main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         return emojis;
     };
 
-    // TODO: add server code here
-#if 1
-    StdioStream stdio;
-    co_await stdio.start();
-    server.addTransport(std::move(stdio));
-#else
-    auto listener = co_await ILIAS_NAMESPACE::TcpListener::bind("127.0.0.1:8848");
-    if (!listener) {
-        co_return -1;
+    auto mdatas = server.server().methodDatas();
+    for (auto& md : mdatas) {
+        printf("%s\n", std::format("{}({}): {}\n", md.name, md.signature, md.description).c_str());
     }
-    SseListener sse(std::move(*listener));
-    while (1) {
-        if (auto ret = co_await sse.accept(); ret) {
-            server.addTransport(std::move(*ret));
+
+    // TODO: add server code here
+    argparser::ArgParserConfig config;
+    config.programName = argc > 0 ? argv[0] : "emoji_server";
+    config.description = "A server that returns emojis";
+    config.version     = "1.0.0";
+    config.usage       = "emoji_server [options]";
+    auto ret           = argparser::parser<CommandConfig>(argc, argv, config);
+    if (!ret) {
+        if (ret.error() == make_error_code(argparser::ArgParserError::HelpRequested)) {
+            printf("%s\n", argparser::format_help<CommandConfig>(argc, argv, config).c_str());
+        } else if (ret.error() == make_error_code(argparser::ArgParserError::VersionRequested)) {
+            printf("%s\n", argparser::format_version(config).c_str());
         } else {
-            break;
+            printf("%s\n", ret.error().message().c_str());
+        }
+        co_return 1;
+    }
+    if (ret.value().index() == 0) {
+        StdioStream stdio;
+        co_await stdio.start();
+        server.addTransport(std::move(stdio));
+    } else if (ret.value().index() == 1) {
+        auto config   = std::get<SSEConfig>(ret.value());
+        auto listener = co_await ILIAS_NAMESPACE::TcpListener::bind(std::format("{}:{}", config.host, config.port));
+        if (!listener) {
+            co_return -1;
+        }
+        SseListener sse(std::move(*listener));
+        while (1) {
+            if (auto ret = co_await sse.accept(); ret) {
+                server.addTransport(std::move(*ret));
+            } else {
+                break;
+            }
         }
     }
-#endif
     co_await server.wait();
 
     co_return 0;

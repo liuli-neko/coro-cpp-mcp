@@ -101,7 +101,7 @@ public:
                                            Implementation{.name = CCMCP_PROJECT_NAME, .version = CCMCP_VERSION_STRING},
                                        ._meta = {}};
     }
-
+    auto client() -> JsonRpcClient<detail::McpJsonRpcMethods>& { return mClient; }
     template <typename StreamType>
     auto setTransport(StreamType&& transport) -> void {
         return mClient.setEndpoint(std::forward<StreamType>(transport));
